@@ -1,0 +1,2476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SoABE Organisation Design Dashboard</title>
+<style>
+  :root{
+    --teal:#16607e; --teal-dark:#0f4a62; --teal-light:#e3eef3; --teal-mid:#4a8caa;
+    --ink:#152936; --muted:#5b7180; --line:#d5e0e6; --bg:#eef3f5; --panel:#ffffff;
+    --amber:#b97a1f; --green:#2e7d5b; --red:#b0492f; --violet:#6a5a9e; --slate:#54707e;
+    --radius:10px;
+    --shadow:0 1px 3px rgba(21,41,54,.08), 0 4px 14px rgba(21,41,54,.06);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background:var(--bg); color:var(--ink); font-size:14px; line-height:1.4;
+  }
+  button{font-family:inherit; cursor:pointer;}
+  input,select{font-family:inherit;}
+
+  /* ---------- Header ---------- */
+  header{
+    background:var(--teal-dark); color:#fff; padding:14px 22px 0;
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+  }
+  header h1{font-size:17px; font-weight:600; letter-spacing:.2px;}
+  header h1 .yr{font-weight:400; opacity:.75; margin-left:6px;}
+  header .sub{font-size:12px; opacity:.75;}
+  /* tabs sit on their own row, folder-style, clearly distinct from the file buttons */
+  .tabs{display:flex; gap:4px; order:3; flex-basis:100%; margin-top:10px;}
+  .tab-btn{
+    background:transparent; color:rgba(255,255,255,.75); border:none;
+    padding:10px 20px 11px; border-radius:9px 9px 0 0; font-size:13.5px;
+  }
+  .tab-btn:hover{color:#fff; background:rgba(255,255,255,.08);}
+  .tab-btn.active{background:var(--bg); color:var(--teal-dark); font-weight:700;}
+  .file-actions{display:flex; gap:6px; margin-left:auto; align-self:flex-start; margin-top:2px;}
+  .file-actions button{
+    background:transparent; color:#cfe2ec; border:1px solid rgba(255,255,255,.3);
+    padding:6px 12px; border-radius:7px; font-size:12px;
+  }
+  .file-actions button:hover{background:rgba(255,255,255,.12); color:#fff;}
+
+  .title-block{flex:1 1 auto; max-width:52%;}
+  .intro{
+    margin-top:7px;
+    font-size:12px; line-height:1.55; color:rgba(255,255,255,.8);
+  }
+  @media (max-width:760px){ .title-block{max-width:none;} }
+  .intro b{color:#fff; font-weight:600;}
+  .tabs{order:3;}
+
+  main{padding:12px 18px 24px;}
+  .tab-page{display:none;}
+  .tab-page.active{display:block;}
+
+  /* ---------- Structure tab layout ---------- */
+  .layout{display:grid; grid-template-columns:minmax(380px, 39%) 1fr; gap:12px; align-items:start;}
+  @media (min-width:1101px){
+    /* body is a column: header + intro take their natural height, main gets the rest */
+    body{display:flex; flex-direction:column; height:100vh; overflow:hidden;}
+    main{flex:1; min-height:0; overflow-y:auto;}
+    #tab-structure.active{height:100%; display:flex; flex-direction:column;}
+    .layout{flex:1; min-height:0;}
+    .stack{height:100%; overflow-y:auto; scrollbar-width:thin; padding-right:2px;}
+    /* left column: fixed Programs panel on top, Disciplines panel scrolls inside itself */
+    .layout > .stack:first-child{display:flex; flex-direction:column; overflow:hidden;}
+    #disc-panel{flex:1; min-height:0; display:flex; flex-direction:column;}
+    #disc-panel > .panel-body{flex:1; min-height:0; overflow-y:auto; scrollbar-width:thin;}
+  }
+  @media (max-width:1100px){ .layout{grid-template-columns:1fr;} }
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow);}
+  .panel-sticky{
+    position:sticky; top:0; z-index:20;
+    box-shadow:0 4px 10px rgba(21,41,54,.14);
+  }
+  .panel-sticky .chip-pool{max-height:28vh; overflow-y:auto;}
+  .panel > .panel-head{
+    display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--line);
+  }
+  .panel-head h2{font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--teal-dark);}
+  .panel-head .hint{font-size:11.5px; color:var(--muted); font-weight:400;}
+  .panel-head .count-badge{
+    background:var(--teal-light); color:var(--teal-dark); font-size:11.5px; font-weight:700;
+    padding:2px 9px; border-radius:12px;
+  }
+  .panel-body{padding:10px 12px;}
+  .stack > .panel + .panel{margin-top:10px;}
+  .mini-btn{
+    margin-left:auto; border:1px solid var(--line); background:#fff; color:var(--teal-dark);
+    font-size:11.5px; padding:4px 10px; border-radius:6px; font-weight:600;
+  }
+  .mini-btn:hover{background:var(--teal-light);}
+  .chart-tools{margin-left:auto; display:flex; gap:5px; align-items:center;}
+  .chart-tools .mini-btn{margin-left:0; min-width:26px;}
+
+  /* ---------- Program chips ---------- */
+  .chip-pool{display:flex; flex-wrap:wrap; gap:8px; min-height:52px; border-radius:8px; padding:4px;}
+  .chip-pool.drag-over{outline:2px dashed var(--teal-mid); outline-offset:2px; background:var(--teal-light);}
+  .chip{
+    position:relative; display:inline-flex; flex-direction:column; gap:1px;
+    background:#fff; border:1.5px solid var(--teal-mid); border-radius:8px;
+    padding:4px 9px 5px; cursor:grab; user-select:none; max-width:210px;
+  }
+  .chip:active{cursor:grabbing;}
+  .chip.dragging{opacity:.4;}
+  .chip .c-name{font-size:12px; font-weight:600; color:var(--teal-dark);}
+  .chip .c-meta{font-size:10.5px; color:var(--muted);}
+  .chip-x{
+    position:absolute; top:-7px; right:-7px; width:16px; height:16px; border-radius:50%;
+    border:none; background:var(--teal-dark); color:#fff; font-size:10px; line-height:16px;
+    text-align:center; padding:0; display:block;
+  }
+  .chip-x:hover{background:var(--red);}
+  .chip .c-meta b{color:var(--ink); font-weight:600;}
+  .pool-empty{font-size:12.5px; color:var(--muted); font-style:italic; padding:8px 4px;}
+
+  /* ---------- Discipline cards ---------- */
+  .disc-card{border:1px solid var(--line); border-radius:9px; margin-bottom:12px; overflow:hidden; background:#fbfdfe;}
+  .disc-card:last-child{margin-bottom:0;}
+  .disc-head{
+    display:flex; align-items:center; gap:8px; padding:8px 10px;
+    background:var(--teal); color:#fff;
+  }
+  .disc-name-wrap{position:relative; flex:1; min-width:80px; display:flex;}
+  .disc-name-wrap .pen{
+    position:absolute; right:8px; top:50%; transform:translateY(-50%);
+    pointer-events:none; font-size:12px; opacity:.75; color:#fff;
+  }
+  .disc-head input.disc-name{
+    width:100%; background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.35);
+    color:#fff; font-size:13.5px; font-weight:600; padding:4px 26px 4px 8px; border-radius:6px;
+  }
+  .disc-head input.disc-name:focus{outline:none; background:rgba(255,255,255,.25);}
+  .disc-name-wrap:focus-within .pen{opacity:0;}
+  .disc-head .disc-del{
+    background:transparent; border:none; color:#fff; opacity:.75; font-size:16px; line-height:1; padding:2px 6px;
+  }
+  .disc-head .disc-del:hover{opacity:1;}
+  .disc-drop{
+    display:flex; flex-wrap:wrap; gap:7px; padding:10px; min-height:48px;
+  }
+  .disc-drop.drag-over{background:var(--teal-light); outline:2px dashed var(--teal-mid); outline-offset:-4px;}
+  .disc-drop .drop-hint{font-size:11.5px; color:var(--muted); font-style:italic; align-self:center;}
+  .disc-foot{
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px;
+    padding:8px 12px; border-top:1px dashed var(--line); background:#f4f8fa; font-size:12px;
+  }
+  .disc-foot .stat b{font-weight:700; color:var(--teal-dark);}
+  .disc-foot label{display:inline-flex; align-items:center; gap:5px; color:var(--ink);}
+  .disc-foot input[type=number]{
+    width:58px; padding:3px 5px; border:1px solid var(--line); border-radius:5px; font-size:12px; text-align:right;
+  }
+  .disc-foot input[type=checkbox]{accent-color:var(--teal);}
+  .disc-foot .svc{color:var(--muted);}
+  .cc-item{
+    display:inline-flex; align-items:center; gap:3px; background:#eef4f7;
+    border:1px solid var(--line); border-radius:6px; padding:2px 6px; color:var(--muted); font-size:11.5px;
+  }
+  .cc-item .cc-del{border:none; background:transparent; color:var(--muted); font-size:10px; padding:0 2px;}
+  .cc-item .cc-del:hover{color:var(--red);}
+  .cc-item input.cc-name{
+    width:92px; padding:2px 5px; border:1px solid var(--line); border-radius:4px;
+    font-size:11px; background:#fff; color:var(--ink);
+  }
+  .cc-add{
+    border:1px dashed var(--teal-mid); background:#fff; color:var(--teal-dark);
+    font-size:11px; padding:2px 8px; border-radius:6px; font-weight:600;
+  }
+  .cc-add:hover{background:var(--teal-light);}
+  .add-disc{
+    width:100%; border:1.5px dashed var(--teal-mid); background:var(--teal-light); color:var(--teal-dark);
+    padding:9px; border-radius:8px; font-size:13px; font-weight:600;
+  }
+  .add-disc:hover{background:#d3e6ee;}
+
+  /* ---------- Stats ---------- */
+  .stats-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); gap:8px;}
+  .stat-card{
+    background:var(--teal-light); border-radius:8px; padding:7px 10px;
+  }
+  .stat-card .v{font-size:17px; font-weight:700; color:var(--teal-dark); line-height:1.1;}
+  .stat-card .l{font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--slate); margin-top:2px;}
+
+  table.lead{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.lead th{
+    text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px;
+    color:var(--slate); padding:6px 8px; border-bottom:1.5px solid var(--line);
+  }
+  table.lead td{padding:6px 8px; border-bottom:1px solid #e8eef1;}
+  table.lead td.num, table.lead th.num{text-align:right;}
+  table.lead input[type=number]{
+    width:62px; padding:3px 5px; border:1px solid var(--line); border-radius:5px; font-size:12px; text-align:right;
+  }
+  table.lead tr.total td{font-weight:700; color:var(--teal-dark); border-bottom:none; border-top:2px solid var(--teal-mid);}
+
+  /* ---------- Org chart ---------- */
+  .chart-wrap{padding:4px 2px 6px; overflow:hidden;}
+  .chart-wrap svg{cursor:grab; touch-action:none;}
+  .chart-wrap svg.panning{cursor:grabbing;}
+  .obox{
+    height:100%; border-radius:7px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:4px 6px; font-family:inherit;
+  }
+  .obox .role{font-size:11px; font-weight:700; letter-spacing:.3px;}
+  .obox .nm{font-size:12px; font-weight:600; margin-top:1px;}
+  .obox .mt{font-size:10.5px; margin-top:2px; opacity:.85;}
+  .ob-hos{background:var(--teal-dark); color:#fff;}
+  .ob-ahos{background:var(--teal); color:#fff;}
+  .ob-hod{background:#fff; border:2px solid var(--teal); color:var(--ink);}
+  .ob-hod .role{color:var(--teal-dark);}
+  .ob-cc{background:var(--teal-light); border:1.5px solid var(--teal-mid); color:var(--ink);}
+  .ob-cc .role{color:var(--teal-dark);}
+  .chart-empty{font-size:12.5px; color:var(--muted); font-style:italic; padding:4px 2px 10px;}
+
+  /* ---------- Comparison tab (single grouped column chart) ---------- */
+  .cmp-grid{display:block;}
+  .bc-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:16px 18px 12px;
+  }
+  .bc-legend{display:flex; flex-wrap:wrap; gap:6px 14px; margin-bottom:16px;}
+  .bc-key{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink);}
+  .bc-key .sw{width:11px; height:11px; border-radius:3px; display:inline-block;}
+  .bc-area{display:flex; align-items:flex-end; gap:30px; min-height:300px;}
+  .bc-cluster{flex:1; min-width:0; display:flex; flex-direction:column; height:100%;}
+  .bc-bars{
+    display:flex; align-items:flex-end; justify-content:center; gap:4px;
+    height:255px; border-bottom:1.5px solid var(--line); padding:0 4px;
+  }
+  .bc-bar-wrap{
+    flex:1; max-width:44px; min-width:10px; height:100%;
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+  }
+  .bc-val{font-size:9.5px; color:var(--muted); margin-bottom:2px; white-space:nowrap;}
+  .bc-bar{width:100%; border-radius:3px 3px 0 0; min-height:2px;}
+  .bc-label{
+    text-align:center; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
+    color:var(--teal-dark); margin-top:7px; line-height:1.25;
+  }
+  .bc-label .bc-sub{display:block; font-weight:400; text-transform:none; letter-spacing:0; color:var(--muted); font-size:10px;}
+  .cmp-empty{
+    background:var(--panel); border:1px dashed var(--line); border-radius:var(--radius);
+    padding:26px; text-align:center; font-size:13px; color:var(--muted); font-style:italic;
+  }
+
+  /* ---------- Tasks tab ---------- */
+  .task-toolbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
+  .task-toolbar .t-count{font-size:12.5px; color:var(--muted); margin-left:auto;}
+  .cat-filter{
+    border:1.5px solid var(--line); background:#fff; border-radius:16px; padding:4px 12px; font-size:12px; color:var(--ink);
+  }
+  .cat-filter.active{border-color:var(--teal); background:var(--teal); color:#fff; font-weight:600;}
+  .kanban{display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; align-items:start;}
+  @media (max-width:1000px){ .kanban{grid-template-columns:repeat(2,1fr);} }
+  .kol{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); min-height:220px; display:flex; flex-direction:column;}
+  .kol-head{
+    padding:10px 12px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px;
+    border-radius:var(--radius) var(--radius) 0 0;
+  }
+  .kol-head h3{font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;}
+  .kol-head .kcount{margin-left:auto; background:var(--teal-light); color:var(--teal-dark); font-size:11.5px; font-weight:700; padding:1px 8px; border-radius:10px;}
+  .kol[data-assign="none"] .kol-head{background:#f4f6f7;}
+  .kol[data-assign="ahos"] .kol-head{background:#f2eef8;}
+  .kol[data-assign="hod"] .kol-head{background:#e6f0f5;}
+  .kol[data-assign="cc"] .kol-head{background:#eaf4ef;}
+  .kol-body{padding:10px; display:flex; flex-direction:column; gap:8px; flex:1; min-height:120px;}
+  .kol-body.drag-over{background:var(--teal-light); outline:2px dashed var(--teal-mid); outline-offset:-4px; border-radius:0 0 var(--radius) var(--radius);}
+  .task-card{
+    position:relative; background:#fff; border:1px solid var(--line); border-left:4px solid var(--slate);
+    border-radius:7px; padding:8px 10px; cursor:grab; user-select:none; font-size:12.5px;
+  }
+  .task-card .task-x{
+    position:absolute; top:4px; right:4px; width:16px; height:16px; border-radius:50%;
+    border:none; background:#c3d2da; color:#fff; font-size:9px; line-height:16px;
+    text-align:center; padding:0;
+  }
+  .task-card .task-x:hover{background:var(--red);}
+  .task-card.has-x{padding-right:24px;}
+  .kol-clear{
+    border:1px solid var(--line); background:#fff; color:var(--muted);
+    font-size:10.5px; padding:2px 8px; border-radius:10px; white-space:nowrap;
+  }
+  .kol-clear:hover{border-color:var(--red); color:var(--red);}
+  .task-card:active{cursor:grabbing;}
+  .task-card.dragging{opacity:.4;}
+  .task-card .tcat{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px;}
+  .task-card[data-cat="Course Leadership"]{border-left-color:var(--teal);}
+  .task-card[data-cat="Course Leadership"] .tcat{color:var(--teal);}
+  .task-card[data-cat="Student Management"]{border-left-color:var(--green);}
+  .task-card[data-cat="Student Management"] .tcat{color:var(--green);}
+  .task-card[data-cat="Industry Engagement"]{border-left-color:var(--amber);}
+  .task-card[data-cat="Industry Engagement"] .tcat{color:var(--amber);}
+  .task-card[data-cat="Marketing & Recruitment"]{border-left-color:var(--red);}
+  .task-card[data-cat="Marketing & Recruitment"] .tcat{color:var(--red);}
+  .task-card[data-cat="Governance & Administration"]{border-left-color:var(--violet);}
+  .task-card[data-cat="Governance & Administration"] .tcat{color:var(--violet);}
+  .kol-empty{font-size:12px; color:var(--muted); font-style:italic; padding:6px 2px;}
+
+  /* ---------- Scenario bar ---------- */
+  .scen-bar{
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:10px;
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:8px 10px;
+  }
+  .sb-label{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--slate); margin-right:2px;}
+  .scen-chip{
+    display:inline-flex; align-items:center; gap:7px;
+    border:1.5px solid var(--line); background:#fff; color:var(--ink);
+    border-radius:16px; padding:4px 10px 4px 12px; font-size:12px; cursor:pointer;
+  }
+  .scen-chip:hover{border-color:var(--teal-mid);}
+  .scen-chip.active{border-color:var(--teal); background:var(--teal); color:#fff; font-weight:600;}
+  .scen-chip .sc-meta{font-size:10.5px; opacity:.7; font-weight:400;}
+  .scen-chip .sc-act{border:none; background:transparent; color:inherit; opacity:.65; font-size:11px; padding:0 1px; cursor:pointer;}
+  .scen-chip .sc-act:hover{opacity:1;}
+  .sb-tools{margin-left:auto; display:flex; gap:5px;}
+  .sb-tools .mini-btn{margin-left:0;}
+
+  /* ---------- Scenario comparison ---------- */
+  .sc-wrap{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px 16px 16px;}
+  table.scmp{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.scmp th{
+    text-align:right; font-size:12px; color:var(--teal-dark); font-weight:700;
+    padding:8px; border-bottom:1.5px solid var(--line); vertical-align:bottom;
+  }
+  table.scmp th:first-child{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--slate); font-weight:700;}
+  table.scmp th.is-active::after{content:" ● live"; color:var(--teal-mid); font-size:10px; font-weight:400;}
+  table.scmp td{padding:7px 8px; border-bottom:1px solid #e8eef1; text-align:right; vertical-align:top;}
+  table.scmp td:first-child{text-align:left; color:var(--ink);}
+  table.scmp td .sub{display:block; font-size:10.5px; color:var(--muted); font-weight:400;}
+  table.scmp tr.sec td{
+    background:#f4f8fa; font-size:10.5px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.5px; color:var(--teal-dark); padding:6px 8px;
+  }
+  table.scmp td.best{color:var(--green); font-weight:700;}
+  table.scmp td.worst{color:var(--red); font-weight:700;}
+  table.scmp tr[data-hl]{cursor:pointer;}
+  table.scmp tr[data-hl]:hover td{background:#f0f6f9;}
+  table.scmp tr.hl td{background:#fdf4e3 !important;}
+  table.scmp tr.hl td.best{color:var(--green);}
+  table.scmp tr.hl td.worst{color:var(--red);}
+  .sc-spread{display:flex; flex-direction:column; gap:4px; padding:4px 0;}
+  .sc-row{display:flex; align-items:center; gap:6px; justify-content:flex-end;}
+  .sc-row .nmm{font-size:10.5px; color:var(--muted); flex:1; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sc-row .brr{height:9px; border-radius:3px; background:var(--teal-mid); min-width:2px;}
+  .sc-row .vvv{font-size:10.5px; color:var(--muted); width:34px; text-align:right;}
+  .sc-note{font-size:11.5px; color:var(--muted); margin-top:12px; line-height:1.55;}
+  .sc-note b{color:var(--ink);}
+
+  /* ---------- Source data tab ---------- */
+  .data-intro{font-size:12px; color:var(--muted); margin:2px 0 12px; line-height:1.5;}
+  .dwrap{overflow-x:auto;}
+  table.dtable{width:100%; border-collapse:collapse; font-size:12.5px; min-width:820px;}
+  table.dtable th{
+    text-align:right; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px;
+    color:var(--slate); padding:8px; border-bottom:1.5px solid var(--line); cursor:pointer; white-space:nowrap; user-select:none;
+  }
+  table.dtable th:first-child{text-align:left;}
+  table.dtable th:hover{color:var(--teal-dark);}
+  table.dtable th.sorted{color:var(--teal-dark);}
+  table.dtable td{padding:7px 8px; border-bottom:1px solid #e8eef1; text-align:right; white-space:nowrap;}
+  table.dtable td:first-child{text-align:left; white-space:normal; min-width:210px;}
+  table.dtable tr.prow{cursor:pointer;}
+  table.dtable tr.prow:hover td{background:#f0f6f9;}
+  table.dtable tr.total td{font-weight:700; color:var(--teal-dark); border-top:2px solid var(--teal-mid); border-bottom:none;}
+  .pexp{color:var(--teal-mid); font-size:10px; margin-right:6px; display:inline-block; width:9px;}
+  .comp-row > td{background:#f7fbfc; padding:2px 8px 10px 8px;}
+  table.ctable{width:100%; border-collapse:collapse; font-size:11.5px; margin-left:16px;}
+  table.ctable th{text-align:right; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); padding:5px 8px; border-bottom:1px solid var(--line); cursor:default;}
+  table.ctable th:first-child, table.ctable th:nth-child(2){text-align:left;}
+  table.ctable td{padding:4px 8px; border-bottom:1px solid #eef3f5; text-align:right; white-space:nowrap;}
+  table.ctable td.ccode{font-family:"Consolas","SF Mono",monospace; font-size:11px; color:var(--teal-dark); text-align:left;}
+  table.ctable td.cname{text-align:left; white-space:normal; color:var(--ink);}
+  .load-hi{color:var(--red); font-weight:700;}
+  .load-lo{color:var(--green); font-weight:700;}
+  .footer-note{margin-top:18px; font-size:11.5px; color:var(--muted);}
+  @media print{
+    header .tabs, header .file-actions{display:none;}
+    body{background:#fff;}
+  }
+
+  /* ---------- Export Report button + picker modal ---------- */
+  .file-actions #btn-report{
+    background:#fff; color:var(--teal-dark); border-color:#fff; font-weight:700;
+  }
+  .file-actions #btn-report:hover{background:#eef6fa; color:var(--teal-dark);}
+  .file-actions #btn-report[disabled]{opacity:.6; cursor:progress;}
+  .file-actions #lib-select{
+    background:rgba(255,255,255,.06); color:#eaf3f7; border:1px solid rgba(255,255,255,.3);
+    padding:6px 8px; border-radius:7px; font-size:12px; max-width:180px;
+  }
+  .file-actions #lib-select option{color:#152936;}
+  .file-actions #lib-save{background:transparent; color:#cfe2ec; border:1px solid rgba(255,255,255,.3);}
+  .file-actions #lib-save[disabled]{opacity:.6; cursor:progress;}
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(15,32,44,.55); z-index:100;
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{
+    background:var(--panel); border-radius:12px; box-shadow:0 12px 40px rgba(15,32,44,.35);
+    width:100%; max-width:440px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;
+  }
+  .modal-head{
+    background:var(--teal-dark); color:#fff; padding:14px 18px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .modal-head h2{font-size:15px; font-weight:600; flex:1;}
+  .modal-head .m-x{background:transparent; border:none; color:#fff; font-size:20px; line-height:1; opacity:.8; padding:0 2px;}
+  .modal-head .m-x:hover{opacity:1;}
+  .modal-body{padding:16px 18px; overflow-y:auto;}
+  .modal-body .m-lead{font-size:12.5px; color:var(--muted); margin-bottom:12px; line-height:1.5;}
+  .m-group-label{
+    font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+    color:var(--slate); margin:14px 0 7px;
+  }
+  .m-check{
+    display:flex; align-items:center; gap:9px; padding:8px 10px; border:1px solid var(--line);
+    border-radius:8px; margin-bottom:7px; cursor:pointer; font-size:13px;
+  }
+  .m-check:hover{background:var(--teal-light); border-color:var(--teal-mid);}
+  .m-check input{width:16px; height:16px; accent-color:var(--teal); cursor:pointer;}
+  .m-check .m-meta{margin-left:auto; font-size:11px; color:var(--muted);}
+  .m-check.m-sub{margin-left:0;}
+  .m-select-row{display:flex; gap:10px; margin:2px 0 4px;}
+  .m-select-row button{
+    background:none; border:none; color:var(--teal); font-size:11.5px; font-weight:600; padding:2px 0; cursor:pointer;
+  }
+  .m-select-row button:hover{text-decoration:underline;}
+  .modal-foot{
+    padding:12px 18px; border-top:1px solid var(--line); display:flex; gap:8px; justify-content:flex-end;
+    background:#f7fafb;
+  }
+  .modal-foot .m-note{margin-right:auto; align-self:center; font-size:11px; color:var(--muted);}
+  .btn-primary{
+    background:var(--teal); color:#fff; border:none; padding:9px 18px; border-radius:8px; font-size:13px; font-weight:600;
+  }
+  .btn-primary:hover{background:var(--teal-dark);}
+  .btn-primary[disabled]{opacity:.5; cursor:not-allowed;}
+  .btn-ghost{
+    background:#fff; color:var(--ink); border:1px solid var(--line); padding:9px 16px; border-radius:8px; font-size:13px;
+  }
+  .btn-ghost:hover{background:var(--teal-light);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-block">
+    <h1>School Organisation Design Dashboard <span class="yr">2026</span></h1>
+    <div class="sub">School of Architecture &amp; Built Environment</div>
+    <div class="intro">
+      This dashboard is for creating the new organisational structure of the SoABE, based on the newly announced
+      leadership positions. <b>To update the org chart:</b> create a discipline, then drag &amp; drop the programs that
+      should fall within it. You can add Course Coordinators to each discipline, and allocate a service&nbsp;% for every
+      role - totals are calculated automatically. <b>Scenarios</b> let you save alternative structures and compare them side by side in the
+      Scenario Comparison tab. <b>In the Task Allocation tab</b> you'll find the current list of Course Director
+      tasks, ready to be allocated to each leadership role.
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tab-btn" data-tab="data">Source Data</button>
+    <button class="tab-btn active" data-tab="structure">Structure &amp; Chart</button>
+    <button class="tab-btn" data-tab="compare">Discipline Comparison</button>
+    <button class="tab-btn" data-tab="scen">Scenario Comparison</button>
+    <button class="tab-btn" data-tab="tasks">Task Allocation</button>
+  </nav>
+  <div class="file-actions">
+    <select id="lib-select" title="Load a saved scenario set from the shared library">
+      <option value="">Shared library…</option>
+    </select>
+    <button id="lib-save" title="Save the current scenario set to the shared library as a new named entry">Save to library</button>
+    <button id="btn-report" title="Create a printable PDF report: source data, a page or two per scenario, and a side-by-side comparison">Export Report</button>
+    <button id="btn-excel" title="Download disciplines, leadership roles, service load and task distribution as an Excel workbook">Export Excel</button>
+    <button id="btn-export" title="Save a snapshot file you can share or re-load later">Export JSON</button>
+    <button id="btn-import" title="Load a snapshot file">Import</button>
+    <button id="btn-reset">Reset</button>
+    <input type="file" id="import-file" accept=".json,application/json" style="display:none">
+  </div>
+</header>
+
+<main>
+  <!-- ================= SOURCE DATA TAB ================= -->
+  <section class="tab-page" id="tab-data">
+    <div class="panel" style="margin-bottom:12px;">
+      <div class="panel-head"><h2>School at a glance</h2><span class="hint">the program numbers that drive every other tab - SoABE Program Summary (2026)</span></div>
+      <div class="panel-body"><div class="stats-grid" id="data-stats"></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Programs &amp; composition</h2><span class="hint">click a program to see the courses it groups; click a column heading to sort</span></div>
+      <div class="panel-body">
+        <div class="dwrap"><table class="dtable" id="data-table"></table></div>
+        <p class="footer-note" id="data-legend"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STRUCTURE TAB ================= -->
+  <section class="tab-page active" id="tab-structure">
+    <div class="scen-bar" id="scen-bar"></div>
+    <div class="layout">
+      <!-- LEFT: builder -->
+      <div class="stack">
+        <div class="panel panel-sticky">
+          <div class="panel-head">
+            <h2>Programs</h2>
+            <span class="count-badge" id="pool-count"></span>
+            <span class="hint">drag a program into a discipline</span>
+          </div>
+          <div class="panel-body">
+            <div class="chip-pool" id="pool" data-drop="pool"></div>
+          </div>
+        </div>
+
+        <div class="panel" id="disc-panel">
+          <div class="panel-head">
+            <h2>Disciplines</h2>
+            <span class="count-badge" id="disc-count"></span>
+            <span class="hint">each discipline = 1 Head of Discipline + any number of CCs</span>
+          </div>
+          <div class="panel-body">
+            <div id="disc-list"></div>
+            <button class="add-disc" id="btn-add-disc">+ Add discipline</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: chart + stats -->
+      <div class="stack">
+        <div class="panel">
+          <div class="panel-head"><h2>School at a glance</h2></div>
+          <div class="panel-body">
+            <div class="stats-grid" id="stats-grid"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Organisation chart</h2><span class="hint">updates live</span>
+            <span class="chart-tools">
+              <button class="mini-btn" id="zoom-out" title="Zoom out (or Ctrl+scroll)">−</button>
+              <button class="mini-btn" id="zoom-pct" title="Current zoom - click to fit">100%</button>
+              <button class="mini-btn" id="zoom-in" title="Zoom in (or Ctrl+scroll)">+</button>
+              <button class="mini-btn" id="btn-fit" title="Fit the whole chart in the window">Fit</button>
+              <button class="mini-btn" id="btn-jpeg">Download JPEG</button>
+            </span>
+          </div>
+          <div class="panel-body">
+            <div class="chart-wrap" id="chart-wrap"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Leadership roles &amp; service load</h2></div>
+          <div class="panel-body">
+            <table class="lead" id="lead-table"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= COMPARISON TAB ================= -->
+  <section class="tab-page" id="tab-compare">
+    <div class="scen-bar" id="scen-bar-cmp"></div>
+    <div class="task-toolbar" id="cmp-toolbar"></div>
+    <div class="cmp-grid" id="cmp-grid"></div>
+  </section>
+
+  <!-- ================= SCENARIO COMPARISON TAB ================= -->
+  <section class="tab-page" id="tab-scen">
+    <div id="scen-compare"></div>
+  </section>
+
+  <!-- ================= TASKS TAB ================= -->
+  <section class="tab-page" id="tab-tasks">
+    <div class="task-toolbar" id="cat-filters"></div>
+    <div class="kanban">
+      <div class="kol" data-assign="none">
+        <div class="kol-head"><h3>Unassigned</h3><span class="kcount"></span></div>
+        <div class="kol-body" data-drop="task"></div>
+      </div>
+      <div class="kol" data-assign="cc">
+        <div class="kol-head"><h3>Course Coordinator</h3><button class="kol-clear" title="Move every task in this column back to Unassigned">Clear all</button><span class="kcount"></span></div>
+        <div class="kol-body" data-drop="task"></div>
+      </div>
+      <div class="kol" data-assign="hod">
+        <div class="kol-head"><h3>Head of Discipline</h3><button class="kol-clear" title="Move every task in this column back to Unassigned">Clear all</button><span class="kcount"></span></div>
+        <div class="kol-body" data-drop="task"></div>
+      </div>
+      <div class="kol" data-assign="ahos">
+        <div class="kol-head"><h3>Assoc. Head of School - Education &amp; Students</h3><button class="kol-clear" title="Move every task in this column back to Unassigned">Clear all</button><span class="kcount"></span></div>
+        <div class="kol-body" data-drop="task"></div>
+      </div>
+    </div>
+    <p class="footer-note">Former Course Director tasks. Drag each task to the role(s) that will own it in the new structure.</p>
+  </section>
+</main>
+
+<!-- ================= EXPORT REPORT MODAL ================= -->
+<div class="modal-overlay" id="report-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+    <div class="modal-head">
+      <h2 id="report-modal-title">Export PDF report</h2>
+      <button class="m-x" id="report-cancel-x" title="Close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="m-lead">Choose what to include. The report opens with the source data, then a page or two for each scenario you select, followed by a side-by-side comparison.</p>
+      <div class="m-group-label">Scenarios</div>
+      <div class="m-select-row">
+        <button type="button" id="rep-all">Select all</button>
+        <button type="button" id="rep-none">Clear</button>
+      </div>
+      <div id="rep-scen-list"></div>
+      <div class="m-group-label">Sections</div>
+      <label class="m-check m-sub"><input type="checkbox" id="rep-source" checked> Source data (programs &amp; courses)</label>
+      <label class="m-check m-sub"><input type="checkbox" id="rep-compare" checked> Comparative analysis</label>
+      <label class="m-check m-sub"><input type="checkbox" id="rep-tasks" checked> Task allocation</label>
+    </div>
+    <div class="modal-foot">
+      <span class="m-note" id="rep-note"></span>
+      <button class="btn-ghost" id="report-cancel">Cancel</button>
+      <button class="btn-primary" id="report-go">Generate PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   Data - programs from SoABE Program Summary_2.xlsx (2026)
+   Tasks from "CDs task list 09072026.pdf" (assignments left blank
+   on purpose - you allocate them in the Task Allocation tab).
+============================================================ */
+const PROGRAMS = [
+  {id:"p01", name:"UG Construction Project Mgmt",  students:852, fte:8.9,  credits:192},
+  {id:"p02", name:"Construction Management (PG)",  students:14,  fte:0.4,  credits:48},
+  {id:"p03", name:"Project Management (PG)",       students:122, fte:4.0,  credits:144},
+  {id:"p04", name:"UG Property Economics",         students:493, fte:6.3,  credits:144},
+  {id:"p05", name:"Property Development (PG)",     students:46,  fte:0.9,  credits:72},
+  {id:"p06", name:"Planning (PG)",                 students:56,  fte:2.65, credits:96},
+  {id:"p07", name:"Real Estate Investment (PG)",   students:35,  fte:0.25, credits:102},
+  {id:"p08", name:"Property Development (OPM)",    students:196, fte:0.2,  credits:72},
+  {id:"p09", name:"Urban Planning (OPM)",          students:110, fte:1.5,  credits:90},
+  {id:"p10", name:"UG Architecture",               students:709, fte:10.1, credits:144},
+  {id:"p11", name:"PG Architecture",               students:256, fte:7.0,  credits:96},
+  {id:"p12", name:"UG Landscape Architecture",     students:173, fte:4.5,  credits:192},
+  {id:"p13", name:"UG Interior Architecture",      students:480, fte:6.3,  credits:144},
+  {id:"p14", name:"Criminology",                   students:659, fte:2.0,  credits:144}
+];
+
+const CL="Course Leadership", SM="Student Management", IE="Industry Engagement",
+      MR="Marketing & Recruitment", GA="Governance & Administration";
+const TASK_LIST_VERSION = 2;   // CDs task list 13/07/2026
+const TASKS = [
+  [CL,"Ensure course quality aligns with Faculty/University policies and strategic priorities, including strategic direction and planning"],
+  [CL,"Maintain external course accreditation with relevant professional bodies (e.g. PMI for GD in CM; RICS, API, PIA), incl. the annual monitoring report"],
+  [CL,"Lead curriculum mapping and assurance of learning activities"],
+  [CL,"Applying and monitoring IGAs; monitor GenAI"],
+  [CL,"Space upkeep"],
+  [CL,"Monitoring class sizes/tutorials/workshops/computer lab requirements"],
+  [CL,"Develop and implement continuous improvement plans including aspects relating to strategic/visionary planning"],
+  [CL,"Lead course reviews, action plans, course meetings"],
+  [CL,"Teaching and subject coordination allocation, adjuncts allocation"],
+  [CL,"Prepare course report for School and Faculty, incl. analysing data on enrolment, retention, graduate outcomes, student feedback and SFS"],
+  [CL,"Facilitate regular course staff meetings"],
+  [CL,"Recruitment of sessional academics"],
+  [CL,"Attend monthly meetings with UTS Online partnership (OPM) and ongoing involvement with strategic decisions"],
+  [CL,"Budget planning and management"],
+  [CL,"Review and maintain suitable electives"],
+  [SM,"Provide academic advice to current and prospective students (e.g. 1-to-1 online consultation)"],
+  [SM,"Assess applications for domestic and international; RPL applications; student exchange inbound/outbound"],
+  [SM,"Approve subject substitutions and study plans, academic caution and exclusion"],
+  [SM,"Streams and majors monitoring and management"],
+  [SM,"Support students experiencing academic difficulties - pastoral care"],
+  [SM,"Manage student complaints, appeals and academic integrity matters"],
+  [SM,"Monitor student progression and retention"],
+  [SM,"Assessing students' industry experience"],
+  [SM,"UTS College coordination"],
+  [SM,"Student rep meetings"],
+  [IE,"Maintain relationships with professional accreditation bodies, incl. attendance at events/meetings/consultations organised by external accreditation bodies"],
+  [IE,"Ensure curriculum reflects current industry needs and emerging trends, incl. attendance and presentation at Industry Advisory Board meetings and consultation with industry, government officials and industry executives"],
+  [IE,"Ensure graduate capabilities meet employer expectations, incl. managing relations with industry practitioners (scholarships, internships and job opportunities for students)"],
+  [IE,"Engage with industry for awards, prizes, internships, scholarships etc."],
+  [MR,"Participate in information/welcome sessions (before the start of Autumn/Spring semesters) including space set up"],
+  [MR,"Promote the course through webinars, presentations, website, social media"],
+  [MR,"Develop promotional materials e.g. PowerPoint"],
+  [MR,"Attend marketing meetings UTS Online partnership (OPM) and/or Keypath; ongoing involvement with strategic decisions"],
+  [MR,"End of Year Show"],
+  [GA,"Liaise with professional staff and academics on timetabling, enrolment and administration and space requirements"],
+  [GA,"Manage course documentation and reporting including internal re-accreditation"],
+  [GA,"Attend RRC and similar meetings"],
+  [GA,"Coordinate annual course planning and subject availabilities"],
+  [GA,"Prepare and oversee casual academic contracts"],
+  [GA,"Review and update admission requirements"]
+].map((t,i)=>({id:"t"+(i+1), cat:t[0], text:t[1], assign:"none"}));
+
+const CATS = [CL, SM, IE, MR, GA];
+
+/* ---------------- scenarios ---------------- */
+const deep = o => JSON.parse(JSON.stringify(o));
+const EXEC_DEF = {hosSvc:100, ahosEduSvc:50, ahosResSvc:50};
+const SEED_SCENARIOS = [
+  { id:"sc1", name:"Scenario 1", exec:deep(EXEC_DEF), disciplines:[] }
+];
+
+function defaultState(){
+  const scs = deep(SEED_SCENARIOS);
+  return {
+    scenarios: scs,
+    activeId: scs[0].id,
+    disciplines: deep(scs[0].disciplines),             // {id, name, programIds[], hodSvc, ccs:[{svc}]}
+    exec: deep(scs[0].exec),                           // service % for fixed roles
+    tasks: JSON.parse(JSON.stringify(TASKS)),
+    taskListVersion: TASK_LIST_VERSION,
+    catFilter: "All",
+    chartZoom: 1, panX: 0, panY: 0
+  };
+}
+
+/* ---------------- persistence ---------------- */
+const KEY = "soabe-org-dashboard-v1";
+let S;
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    S = raw ? JSON.parse(raw) : defaultState();
+    if(!S.disciplines || !S.tasks || !S.exec) S = defaultState();
+    // migrate old "both" column to unassigned (replaced by AHoS column)
+    S.tasks.forEach(t=>{ if(!["none","hod","cc","ahos"].includes(t.assign)) t.assign = "none"; });
+    // swap in the updated task list (13/07/2026), keeping allocations for tasks whose text is unchanged
+    if(S.taskListVersion !== TASK_LIST_VERSION){
+      const old = S.tasks;
+      S.tasks = JSON.parse(JSON.stringify(TASKS));
+      S.tasks.forEach(t=>{
+        const m = old.find(o=>o.cat===t.cat && o.text===t.text && o.assign!=="none");
+        if(m) t.assign = m.assign;
+      });
+      S.taskListVersion = TASK_LIST_VERSION;
+    }
+    // migrate single-CC disciplines (hasCC/ccSvc) to a list of CCs
+    S.disciplines.forEach(d=>{
+      if(!Array.isArray(d.ccs)) d.ccs = (d.hasCC===false) ? [] : [{svc:+d.ccSvc||0}];
+      d.ccs = d.ccs.map(c=>({name:c.name||"", svc:+c.svc||0}));
+      delete d.hasCC; delete d.ccSvc;
+    });
+    // apply new service defaults to untouched saves (all three still 0)
+    if(+S.exec.hosSvc===0 && +S.exec.ahosEduSvc===0 && +S.exec.ahosResSvc===0){
+      S.exec = { hosSvc:100, ahosEduSvc:50, ahosResSvc:50 };
+    }
+    // ---- scenarios: wrap an existing (pre-scenario) structure as scenario A, add seed B ----
+    if(!Array.isArray(S.scenarios) || !S.scenarios.length){
+      const seeds = deep(SEED_SCENARIOS);
+      if(S.disciplines.length){
+        seeds[0].disciplines = deep(S.disciplines);
+        seeds[0].exec = deep(S.exec);
+      }
+      S.scenarios = seeds;
+      S.activeId = seeds[0].id;
+      S.disciplines = deep(seeds[0].disciplines);
+      S.exec = deep(seeds[0].exec);
+    }
+    if(!S.scenarios.find(x=>x.id===S.activeId)) S.activeId = S.scenarios[0].id;
+    S.scenarios.forEach(sc=>{
+      sc.exec = Object.assign({}, EXEC_DEF, sc.exec||{});
+      (sc.disciplines||[]).forEach(d=>{
+        if(!Array.isArray(d.ccs)) d.ccs = [];
+        d.ccs = d.ccs.map(c=>({name:c.name||"", svc:+c.svc||0}));
+        d.hodSvc = +d.hodSvc||0;
+      });
+    });
+    if(!S.chartZoom) S.chartZoom = 1;
+    if(typeof S.panX !== "number") S.panX = 0;
+    if(typeof S.panY !== "number") S.panY = 0;
+  }catch(e){ S = defaultState(); }
+}
+function syncActive(){
+  if(!S.scenarios) return;
+  const sc = S.scenarios.find(x=>x.id===S.activeId);
+  if(sc){ sc.disciplines = deep(S.disciplines); sc.exec = deep(S.exec); }
+}
+function save(){ syncActive(); try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+/* ---------------- helpers ---------------- */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const prog = id => PROGRAMS.find(p=>p.id===id);
+const esc = s => String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = n => n.toLocaleString("en-AU");
+const fmt1 = n => (Math.round(n*100)/100).toLocaleString("en-AU");
+const assignedIds = () => new Set(S.disciplines.flatMap(d=>d.programIds));
+function discTotals(d){
+  let st=0, fte=0, cr=0;
+  d.programIds.forEach(id=>{ const p=prog(id); if(p){ st+=p.students; fte+=p.fte; cr+=(p.credits||0); } });
+  return {students:st, fte:fte, credits:cr, n:d.programIds.length};
+}
+let uid = 0;
+const newId = () => "d" + Date.now().toString(36) + (uid++);
+let chartW = 0, chartH = 0;               // current chart extents (set by renderChart)
+
+/* ---------------- render: program pool ---------------- */
+function chipHTML(p, removable){
+  return `<div class="chip" draggable="true" data-prog="${p.id}">
+    ${removable ? '<button class="chip-x" title="Remove from this discipline (returns to the program pool)">✕</button>' : ''}
+    <span class="c-name">${esc(p.name)}</span>
+    <span class="c-meta"><b>${fmt(p.students)}</b> students · <b>${fmt1(p.fte)}</b> FTE</span>
+    <span class="c-meta"><b>${fmt(p.credits)}</b> credit points</span>
+  </div>`;
+}
+function renderPool(){
+  const used = assignedIds();
+  const free = PROGRAMS.filter(p=>!used.has(p.id));
+  $("#pool").innerHTML = free.length
+    ? free.map(p=>chipHTML(p, false)).join("")
+    : `<div class="pool-empty">All ${PROGRAMS.length} programs are grouped into disciplines. Drag a chip back here to ungroup it.</div>`;
+  $("#pool-count").textContent = free.length + " / " + PROGRAMS.length + " ungrouped";
+}
+
+/* ---------------- render: disciplines ---------------- */
+function renderDiscs(){
+  $("#disc-count").textContent = S.disciplines.length;
+  $("#disc-list").innerHTML = S.disciplines.map(d=>{
+    const t = discTotals(d);
+    return `<div class="disc-card" data-disc="${d.id}">
+      <div class="disc-head">
+        <span class="disc-name-wrap">
+          <input class="disc-name" value="${esc(d.name)}" aria-label="Discipline name" title="Click to rename this discipline">
+          <span class="pen">✎</span>
+        </span>
+        <button class="disc-del" title="Delete discipline (programs return to the pool)">✕</button>
+      </div>
+      <div class="disc-drop" data-drop="${d.id}">
+        ${d.programIds.map(id=>chipHTML(prog(id), true)).join("") || '<span class="drop-hint">Drop programs here</span>'}
+      </div>
+      <div class="disc-foot">
+        <span class="stat"><b>${t.n}</b> programs</span>
+        <span class="stat"><b>${fmt(t.students)}</b> students</span>
+        <span class="stat"><b>${fmt1(t.fte)}</b> FTE</span>
+        <span class="stat"><b>${fmt(t.credits)}</b> credits</span>
+        <label class="svc">HoD service <input type="number" class="hod-svc" value="${d.hodSvc}" min="0" max="100" step="5">%</label>
+        ${d.ccs.map((c,i)=>`<span class="cc-item">CC
+          <input type="text" class="cc-name" data-cc="${i}" value="${esc(c.name||"")}" placeholder="name" title="Course Coordinator name">
+          <input type="number" class="cc-svc" data-cc="${i}" value="${c.svc}" min="0" max="100" step="5">%
+          <button class="cc-del" data-cc="${i}" title="Remove this Course Coordinator">✕</button></span>`).join("")}
+        <button class="cc-add" title="Add a Course Coordinator under this Head of Discipline">+ CC</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------------- render: stats & leadership ---------------- */
+function renderStats(){
+  const used = assignedIds();
+  const nDisc = S.disciplines.length;
+  const nCC = S.disciplines.reduce((a,d)=>a+d.ccs.length,0);
+  const totSt = PROGRAMS.reduce((a,p)=>a+p.students,0);
+  const totF  = PROGRAMS.reduce((a,p)=>a+p.fte,0);
+  const totCr = PROGRAMS.reduce((a,p)=>a+(p.credits||0),0);
+  const hodSvc = S.disciplines.reduce((a,d)=>a + (+d.hodSvc||0), 0);
+  const ccSvc  = S.disciplines.reduce((a,d)=>a + d.ccs.reduce((x,c)=>x+(+c.svc||0),0), 0);
+  const e = S.exec;
+  const totalRoles = 3 + nDisc + nCC;
+  const totalSvc = (+e.hosSvc||0)+(+e.ahosEduSvc||0)+(+e.ahosResSvc||0)+hodSvc+ccSvc;
+  const cards = [
+    [PROGRAMS.length, "Programs"],
+    [nDisc, "Disciplines"],
+    [nDisc, "Heads of Discipline"],
+    [nCC, "Course Coordinators"],
+    [fmt(totSt), "Students (school)"],
+    [fmt1(totF), "Staff FTE (school)"],
+    [fmt(totCr), "Credit points (school)"],
+    [fmt1(totalSvc)+"%", "Total service"]
+  ];
+  $("#stats-grid").innerHTML = cards.map(c=>`<div class="stat-card"><div class="v">${c[0]}</div><div class="l">${c[1]}</div></div>`).join("");
+  $("#lead-table").innerHTML = `
+    <tr><th>Role</th><th class="num">Count</th><th class="num">Total service %</th></tr>
+    <tr><td>Head of School</td><td class="num">1</td>
+        <td class="num"><input type="number" data-exec="hosSvc" value="${e.hosSvc}" min="0" max="100" step="5"></td></tr>
+    <tr><td>Associate Head of School - Education &amp; Students</td><td class="num">1</td>
+        <td class="num"><input type="number" data-exec="ahosEduSvc" value="${e.ahosEduSvc}" min="0" max="100" step="5"></td></tr>
+    <tr><td>Associate Head of School - Research</td><td class="num">1</td>
+        <td class="num"><input type="number" data-exec="ahosResSvc" value="${e.ahosResSvc}" min="0" max="100" step="5"></td></tr>
+    <tr><td>Heads of Discipline</td><td class="num">${nDisc}</td><td class="num">${fmt1(hodSvc)}%</td></tr>
+    <tr><td>Course Coordinators</td><td class="num">${nCC}</td><td class="num">${fmt1(ccSvc)}%</td></tr>
+    <tr class="total"><td>All leadership roles</td><td class="num">${totalRoles}</td><td class="num">${fmt1(totalSvc)}%</td></tr>`;
+}
+
+/* ---------------- render: org chart (SVG) ---------------- */
+function renderChart(){
+  const wrap = $("#chart-wrap");
+  const ds = S.disciplines;
+  const BW=158, COL=174;                    // box width, column width
+  const CCW=142, CGAP=12;                   // CC box width & vertical gap (CCs stack, fed from a side trunk)
+  const yHos=12, hHos=54, yRow=120, hHod=104, hAhos=64, hCc=72;
+  const yCc = yRow + hHod + 36;
+  const n = ds.length;
+  const peers = n + 2;                       // HoDs + the two AHoS all sit on one row under the HoS
+  const colC = i => i*COL + COL/2;
+  const centers = ds.map((d,i)=>colC(i));
+  const eduC = colC(n), resC = colC(n+1);
+  const busXs = colC(0), busXe = colC(peers-1);
+  const hosC = (busXs + busXe)/2;
+  const W = Math.ceil(peers*COL);
+  const maxCC = ds.reduce((a,d)=>Math.max(a, d.ccs.length), 0);
+  const H = maxCC>0 ? yCc + maxCC*(hCc+CGAP) : yRow + hHod + 12;
+  const LN = `stroke="#8fb0bf" stroke-width="1.6" fill="none"`;
+
+  const box=(cx,y,w,h,cls,html)=>`<foreignObject x="${cx-w/2}" y="${y}" width="${w}" height="${h}">
+     <div xmlns="http://www.w3.org/1999/xhtml" class="obox ${cls}">${html}</div></foreignObject>`;
+  const svcTag = v => (+v>0 ? ` · ${fmt1(+v)}% svc` : "");
+
+  let lines="", boxes="";
+  // HoS + a single bus that feeds every direct report (HoDs and both AHoS)
+  boxes += box(hosC, yHos, BW, hHos, "ob-hos", `<span class="role">Head of School</span>`);
+  const busY = (yHos+hHos+yRow)/2;
+  lines += `<path d="M ${hosC} ${yHos+hHos} V ${busY}" ${LN}/>`;
+  lines += `<path d="M ${busXs} ${busY} H ${busXe}" ${LN}/>`;
+  const drop = cx => { lines += `<path d="M ${cx} ${busY} V ${yRow}" ${LN}/>`; };
+
+  ds.forEach((d,i)=>{
+    const cx = centers[i];
+    const t = discTotals(d);
+    drop(cx);
+    boxes += box(cx, yRow, BW, hHod, "ob-hod",
+      `<span class="role">Head of Discipline</span><span class="nm">${esc(d.name)}</span>
+       <span class="mt">${t.n} program${t.n===1?"":"s"} · ${fmt(t.students)} students</span>
+       <span class="mt">${fmt(t.credits)} credits · ${fmt1(t.fte)} FTE${svcTag(d.hodSvc)}</span>`);
+    if(d.ccs.length){
+      // CCs stack below the HoD; a trunk drops on their left and feeds each one equally from the side
+      const bx = cx + 12;                 // CC boxes nudged right to make room for the trunk
+      const trunkX = bx - CCW/2 - 12;
+      const lastMid = yCc + (d.ccs.length-1)*(hCc+CGAP) + hCc/2;
+      lines += `<path d="M ${trunkX} ${yRow+hHod} V ${lastMid}" ${LN}/>`;
+      d.ccs.forEach((c,k)=>{
+        const y0 = yCc + k*(hCc+CGAP), midY = y0 + hCc/2;
+        lines += `<path d="M ${trunkX} ${midY} H ${bx-CCW/2}" ${LN}/>`;
+        boxes += box(bx, y0, CCW, hCc, "ob-cc",
+          `<span class="role">Course Coordinator</span>${c.name?`<span class="nm">${esc(c.name)}</span>`:`<span class="nm">${esc(d.name)}</span>`}${+c.svc>0?`<span class="mt">${fmt1(+c.svc)}% svc</span>`:""}`);
+      });
+    }
+  });
+
+  // the two Associate Heads sit on the same row, to the right of the Heads of Discipline
+  drop(eduC);
+  boxes += box(eduC, yRow, BW, hAhos, "ob-ahos",
+    `<span class="role">Associate Head of School</span><span class="nm">Education &amp; Students</span>${S.exec.ahosEduSvc>0?`<span class="mt">${fmt1(+S.exec.ahosEduSvc)}% svc</span>`:""}`);
+  drop(resC);
+  boxes += box(resC, yRow, BW, hAhos, "ob-ahos",
+    `<span class="role">Associate Head of School</span><span class="nm">Research</span>${S.exec.ahosResSvc>0?`<span class="mt">${fmt1(+S.exec.ahosResSvc)}% svc</span>`:""}`);
+
+  chartW = W; chartH = H;
+  clampPan();
+  const Z = S.chartZoom || 1;
+  wrap.innerHTML =
+    (n===0 ? `<div class="chart-empty">No disciplines yet - add a discipline and drag programs into it to grow the chart.</div>` : "") +
+    `<svg id="org-svg" viewBox="${S.panX} ${S.panY} ${W/Z} ${H/Z}" preserveAspectRatio="xMidYMid meet"
+       style="width:100%; height:auto; max-height:64vh; display:block; margin:0 auto" xmlns="http://www.w3.org/2000/svg">${lines}${boxes}</svg>`;
+}
+
+/* ---------------- render: discipline comparison ---------------- */
+const CMP_METRICS = [
+  {key:"students", label:"Students",               fmt:v=>fmt(v),        color:"var(--teal)"},
+  {key:"fte",      label:"Staff FTE",              fmt:v=>fmt1(v),       color:"var(--teal-mid)"},
+  {key:"credits",  label:"Credit points",         fmt:v=>fmt(v),        color:"var(--red)"},
+  {key:"programs", label:"Programs",               fmt:v=>v,             color:"var(--slate)"},
+  {key:"ccs",      label:"Course Coordinators",    fmt:v=>v,             color:"var(--green)"},
+  {key:"svc",      label:"Service allocation",     fmt:v=>fmt1(v)+"%", color:"var(--amber)"},
+  {key:"perFte",   label:"Students per staff FTE", fmt:v=>fmt1(v),      color:"var(--violet)"}
+];
+function renderCompare(){
+  const tb = $("#cmp-toolbar"), el = $("#cmp-grid");
+  const view = S.cmpView || "data";
+  tb.innerHTML = `
+    <button class="cat-filter ${view==="data"?"active":""}" data-cmpview="data">Data table</button>
+    <button class="cat-filter ${view==="metric"?"active":""}" data-cmpview="metric">Chart by metric</button>
+    <button class="cat-filter ${view==="disc"?"active":""}" data-cmpview="disc">Chart by discipline</button>
+    <span class="t-count">${view==="data" ? "click a discipline to see its programs; click a heading to sort" : "bars are scaled to the largest discipline for each metric"}</span>`;
+  if(view==="data"){ renderDiscData(el); return; }
+  const ds = S.disciplines;
+  if(!ds.length){
+    el.innerHTML = `<div class="cmp-empty">No disciplines yet - build the structure in the first tab and the comparison charts will appear here.</div>`;
+    return;
+  }
+  // one row per discipline, in the same order as the org chart (always)
+  const rows = ds.map(d=>{
+    const t = discTotals(d);
+    return {
+      name: d.name,
+      students: t.students,
+      fte: t.fte,
+      credits: t.credits,
+      programs: t.n,
+      ccs: d.ccs.length,
+      svc: (+d.hodSvc||0) + d.ccs.reduce((x,c)=>x+(+c.svc||0),0),
+      perFte: t.fte>0 ? t.students/t.fte : 0
+    };
+  });
+  const maxOf = {};
+  CMP_METRICS.forEach(m=>{ maxOf[m.key] = Math.max(...rows.map(r=>r[m.key]), 0.0001); });
+
+  const discColor = i => CMP_COLORS[i % CMP_COLORS.length];
+  const vbar = (h, color, val, tip) =>
+    `<div class="bc-bar-wrap" title="${esc(tip)}">
+       <span class="bc-val">${val}</span>
+       <span class="bc-bar" style="height:${Math.max(1, h*100)}%; background:${color}"></span>
+     </div>`;
+  const key = (color, label) => `<span class="bc-key"><span class="sw" style="background:${color}"></span>${esc(label)}</span>`;
+
+  let legend, clusters;
+  if(view === "metric"){
+    // groups = metrics, one column per discipline inside each group (fixed order)
+    legend = rows.map((r,i)=>key(discColor(i), r.name)).join("");
+    clusters = CMP_METRICS.map(m=>`<div class="bc-cluster">
+      <div class="bc-bars">${rows.map((r,i)=>vbar(r[m.key]/maxOf[m.key], discColor(i), m.fmt(r[m.key]), r.name+" - "+m.label+": "+m.fmt(r[m.key]))).join("")}</div>
+      <div class="bc-label">${m.label}${m.note?`<span class="bc-sub">${m.note}</span>`:""}</div>
+    </div>`).join("");
+  } else {
+    // groups = disciplines, one column per metric inside each group
+    legend = CMP_METRICS.map(m=>key(m.color, m.label)).join("");
+    clusters = rows.map(r=>`<div class="bc-cluster">
+      <div class="bc-bars">${CMP_METRICS.map(m=>vbar(r[m.key]/maxOf[m.key], m.color, m.fmt(r[m.key]), r.name+" - "+m.label+": "+m.fmt(r[m.key]))).join("")}</div>
+      <div class="bc-label">${esc(r.name)}</div>
+    </div>`).join("");
+  }
+  el.innerHTML = `<div class="bc-card">
+    <div class="bc-legend">${legend}</div>
+    <div class="bc-area">${clusters}</div>
+  </div>`;
+}
+const CMP_COLORS = ["#16607e","#4a8caa","#2e7d5b","#b97a1f","#6a5a9e","#b0492f","#54707e","#3c8d8d","#8a6d3b","#7e5a4a","#4f7ea3","#97552b"];
+$("#cmp-toolbar").addEventListener("click", e=>{
+  const b = e.target.closest("[data-cmpview]"); if(!b) return;
+  S.cmpView = b.dataset.cmpview; save(); renderCompare();
+});
+
+/* ---------------- render: tasks ---------------- */
+function renderTasks(){
+  // filters
+  const cats = ["All", ...CATS];
+  $("#cat-filters").innerHTML = cats.map(c=>
+    `<button class="cat-filter ${S.catFilter===c?"active":""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("")
+    + `<span class="t-count" id="t-count"></span>`;
+  // columns
+  $$("#tab-tasks .kol").forEach(col=>{
+    const a = col.dataset.assign;
+    const list = S.tasks.filter(t=>t.assign===a && (S.catFilter==="All" || t.cat===S.catFilter));
+    const all = S.tasks.filter(t=>t.assign===a);
+    col.querySelector(".kcount").textContent = all.length;
+    col.querySelector(".kol-body").innerHTML = list.length
+      ? list.map(t=>`<div class="task-card${a!=="none"?" has-x":""}" draggable="true" data-task="${t.id}" data-cat="${esc(t.cat)}">
+           ${a!=="none"?'<button class="task-x" title="Remove (back to Unassigned)">✕</button>':''}
+           <div class="tcat">${esc(t.cat)}</div>${esc(t.text)}</div>`).join("")
+      : `<div class="kol-empty">Drop tasks here</div>`;
+  });
+  const done = S.tasks.filter(t=>t.assign!=="none").length;
+  $("#t-count").textContent = `${done} of ${S.tasks.length} tasks allocated`;
+}
+
+
+/* ---------------- render: scenario bar ---------------- */
+function scenTotals(sc){
+  const ds = sc.disciplines || [];
+  const rows = ds.map(d=>{
+    const t = discTotals(d);
+    return {name:d.name, students:t.students, fte:t.fte, credits:t.credits, programs:t.n,
+            ccs:d.ccs.length, svc:(+d.hodSvc||0) + d.ccs.reduce((x,c)=>x+(+c.svc||0),0)};
+  });
+  const grouped = new Set(ds.flatMap(d=>d.programIds)).size;
+  const e = Object.assign({}, EXEC_DEF, sc.exec||{});
+  const fteA = rows.map(r=>r.fte), stA = rows.map(r=>r.students);
+  const nz = a => a.filter(v=>v>0);
+  const mx = a => a.length ? Math.max(...a) : 0;
+  const mn = a => nz(a).length ? Math.min(...nz(a)) : 0;   // smallest non-zero (ignores empty disciplines)
+  const mnAll = a => a.length ? Math.min(...a) : 0;         // true smallest (counts can be 0)
+  const progA = rows.map(r=>r.programs), ccA = rows.map(r=>r.ccs), crA = rows.map(r=>r.credits);
+  const nCC = rows.reduce((a,r)=>a+r.ccs,0);
+  const hodSvc = rows.reduce((a,r)=>a+(+ds[rows.indexOf(r)].hodSvc||0),0);
+  const svcTot = rows.reduce((a,r)=>a+r.svc,0) + (+e.hosSvc||0)+(+e.ahosEduSvc||0)+(+e.ahosResSvc||0);
+  return {
+    rows, n:ds.length, grouped, ungrouped:PROGRAMS.length-grouped,
+    ccs:nCC, roles:3+ds.length+nCC, svcTot,
+    maxFte:mx(fteA), minFte:mn(fteA), ratioFte: mn(fteA)>0 ? mx(fteA)/mn(fteA) : 0,
+    maxSt:mx(stA), minSt:mn(stA), ratioSt: mn(stA)>0 ? mx(stA)/mn(stA) : 0,
+    maxProg:mx(progA), minProg:mnAll(progA),
+    maxCC:mx(ccA), minCC:mnAll(ccA),
+    maxCr:mx(crA), minCr:mnAll(crA),
+    ...(function(){
+      // Per-metric ratio = largest / smallest across disciplines (raw values).
+      // A metric is skipped (ratio 0 = "n/a") only when its smallest value is 0, since largest / 0 is undefined.
+      const ratioOf = a => (a.length && Math.min(...a) > 0) ? Math.max(...a)/Math.min(...a) : 0;
+      const rCc = ratioOf(ccA), rProg = ratioOf(progA), rFte = ratioOf(fteA), rSt = ratioOf(stA), rCr = ratioOf(crA);
+      // Discipline Balance Score = GEOMETRIC mean of the defined ratios. 1.0 = perfect balance; lower is better.
+      const defined = [rCc, rProg, rFte, rSt, rCr].filter(x=>x>0);
+      const balance = defined.length ? Math.pow(defined.reduce((a,b)=>a*b,1), 1/defined.length) : 0;
+      return { rCc, rProg, rFte, rSt, rCr, balance };
+    })()
+  };
+}
+function renderScenBar(){
+  const html = `<span class="sb-label">Scenario</span>` + S.scenarios.map(sc=>{
+    const t = scenTotals(sc);
+    const on = sc.id===S.activeId;
+    return `<span class="scen-chip ${on?"active":""}" data-scen="${sc.id}" title="Switch to this scenario">
+      ${esc(sc.name)} <span class="sc-meta">${t.n} disc</span>
+      ${on?`<button class="sc-act" data-act="rename" title="Rename this scenario">✎</button>
+            <button class="sc-act" data-act="del" title="Delete this scenario">✕</button>`:""}
+    </span>`;
+  }).join("") + `
+    <span class="sb-tools">
+      <button class="mini-btn" data-act="dup" title="Copy the current scenario and edit the copy">Duplicate</button>
+      <button class="mini-btn" data-act="new" title="Start a new empty scenario">+ New</button>
+    </span>`;
+  $$(".scen-bar").forEach(bar=>{ bar.innerHTML = html; });
+}
+function switchScen(id){
+  if(id===S.activeId) return;
+  syncActive();
+  const sc = S.scenarios.find(x=>x.id===id); if(!sc) return;
+  S.activeId = id;
+  S.disciplines = deep(sc.disciplines);
+  S.exec = deep(sc.exec);
+  renderAll();
+}
+function scenBarClick(e){
+  const act = e.target.closest("[data-act]");
+  if(act){
+    const a = act.dataset.act;
+    if(a==="new"){
+      syncActive();
+      const sc = {id:newId(), name:"Scenario "+(S.scenarios.length+1), disciplines:[], exec:deep(EXEC_DEF)};
+      S.scenarios.push(sc); S.activeId = sc.id;
+      S.disciplines = []; S.exec = deep(EXEC_DEF);
+      renderAll(); return;
+    }
+    if(a==="dup"){
+      syncActive();
+      const cur = S.scenarios.find(x=>x.id===S.activeId);
+      const sc = {id:newId(), name:(cur?cur.name:"Scenario")+" (copy)",
+                  disciplines:deep(S.disciplines), exec:deep(S.exec)};
+      S.scenarios.push(sc); S.activeId = sc.id;
+      renderAll(); return;
+    }
+    if(a==="rename"){
+      const cur = S.scenarios.find(x=>x.id===S.activeId); if(!cur) return;
+      const nm = prompt("Rename scenario", cur.name);
+      if(nm){ cur.name = nm; renderAll(); }
+      return;
+    }
+    if(a==="del"){
+      if(S.scenarios.length<2){ alert("Keep at least one scenario."); return; }
+      const cur = S.scenarios.find(x=>x.id===S.activeId); if(!cur) return;
+      if(!confirm(`Delete scenario "${cur.name}"? Its structure will be lost.`)) return;
+      S.scenarios = S.scenarios.filter(x=>x!==cur);
+      const nx = S.scenarios[0];
+      S.activeId = nx.id; S.disciplines = deep(nx.disciplines); S.exec = deep(nx.exec);
+      renderAll(); return;
+    }
+  }
+  const chip = e.target.closest("[data-scen]");
+  if(chip) switchScen(chip.dataset.scen);
+}
+$$(".scen-bar").forEach(bar=>bar.addEventListener("click", scenBarClick));
+
+/* click a scenario-comparison row to highlight it (handy for group discussion) */
+let hlAnchor = null;    // last row clicked without shift, used as the range anchor
+$("#scen-compare").addEventListener("click", e=>{
+  const tr = e.target.closest("tr[data-hl]");
+  if(!tr) return;
+  const all = $$("#scen-compare tr[data-hl]");
+  if(e.shiftKey && hlAnchor && all.includes(hlAnchor)){
+    // Shift: highlight the whole range between the anchor and this row
+    let i = all.indexOf(hlAnchor), j = all.indexOf(tr);
+    if(i>j) [i,j] = [j,i];
+    all.forEach(r=>r.classList.remove("hl"));
+    for(let k=i;k<=j;k++) all[k].classList.add("hl");
+    // anchor stays put so the range can be re-dragged from the same start
+  } else if(e.ctrlKey || e.metaKey){
+    // Ctrl/Cmd: add or remove this single row, keep the rest
+    tr.classList.toggle("hl");
+    hlAnchor = tr;
+  } else {
+    // Plain click: select only this row (clicking the only lit row clears it)
+    const lit = $$("#scen-compare tr.hl");
+    const soloOn = lit.length===1 && lit[0]===tr;
+    lit.forEach(r=>r.classList.remove("hl"));
+    if(!soloOn) tr.classList.add("hl");
+    hlAnchor = soloOn ? null : tr;
+  }
+});
+
+/* ---------------- render: scenario comparison ---------------- */
+function renderScenCompare(){
+  const el = $("#scen-compare"); if(!el) return;
+  syncActive();
+  const scs = S.scenarios;
+  const T = scs.map(scenTotals);
+  const col = i => (scs[i].id===S.activeId ? ' class="is-active"' : "");
+
+  // lower is better for the two spread ratios
+  const flag = (vals, i, lowerBetter) => {
+    const v = vals.filter(x=>x>0);
+    if(v.length<2 || !vals[i]) return "";
+    const best = lowerBetter ? Math.min(...v) : Math.max(...v);
+    const worst= lowerBetter ? Math.max(...v) : Math.min(...v);
+    if(vals[i]===best)  return ' class="best"';
+    if(vals[i]===worst) return ' class="worst"';
+    return "";
+  };
+  const row = (label, sub, fn) =>
+    `<tr data-hl="1"><td>${label}${sub?`<span class="sub">${sub}</span>`:""}</td>${T.map((t,i)=>`<td>${fn(t,i)}</td>`).join("")}</tr>`;
+  const ratioRow = (label, sub, key) => {
+    const vals = T.map(t=>t[key]);
+    return `<tr data-hl="1"><td>${label}${sub?`<span class="sub">${sub}</span>`:""}</td>` +
+      T.map((t,i)=>`<td${flag(vals,i,true)}>${t[key] ? fmt1(t[key])+" : 1" : "-"}</td>`).join("") + `</tr>`;
+  };
+  const sec = t => `<tr class="sec"><td colspan="${T.length+1}">${t}</td></tr>`;
+  // "smallest - largest" across the disciplines in each scenario
+  const rangeRow = (label, sub, mnKey, mxKey, f) =>
+    `<tr data-hl="1"><td>${label}${sub?`<span class="sub">${sub}</span>`:""}</td>` +
+      T.map(t=>`<td>${t.n ? f(t[mnKey])+" - "+f(t[mxKey]) : "-"}</td>`).join("") + `</tr>`;
+  // whole numbers show no decimal; otherwise one decimal place
+  const fmtRatio = v => { const r = Math.round(v*10)/10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
+  // largest ÷ smallest for one metric. When the smallest is 0 (e.g. a discipline with no Course
+  // Coordinators) the ratio is undefined, so we show "largest : 0" instead.
+  const metricRatioRow = (label, key, maxKey) => {
+    const vals = T.map(t=>t[key]);
+    return `<tr data-hl="1"><td>${label}<span class="sub">largest ÷ smallest</span></td>` +
+      T.map((t,i)=>{
+        let disp = "-";
+        if(t.n && t[key]) disp = fmtRatio(t[key]) + " : 1";
+        else if(t.n && t[maxKey] > 0) disp = t[maxKey] + " : 0";
+        return `<td${flag(vals,i,true)}>${disp}</td>`;
+      }).join("") + `</tr>`;
+  };
+
+  el.innerHTML = `<div class="sc-wrap">
+    <table class="scmp">
+      <tr><th>Metric</th>${scs.map((sc,i)=>`<th${col(i)}>${esc(sc.name)}</th>`).join("")}</tr>
+
+      ${sec("Structure")}
+      ${row("Disciplines","one Head of Discipline each", t=>t.n)}
+      ${row("Programs grouped","of "+PROGRAMS.length, t=>t.grouped + (t.ungrouped?` <span class="sub">${t.ungrouped} ungrouped</span>`:""))}
+      ${row("Most programs in one discipline","", t=>t.maxProg)}
+
+      ${sec("Discipline size")}
+      ${rangeRow("Staff FTE range","smallest - largest discipline","minFte","maxFte",v=>fmt1(v))}
+      ${rangeRow("Students range","smallest - largest discipline","minSt","maxSt",v=>fmt(v))}
+      ${rangeRow("Programs per discipline range","smallest - largest discipline","minProg","maxProg",v=>v)}
+      ${rangeRow("Course Coordinators per discipline range","smallest - largest discipline","minCC","maxCC",v=>v)}
+      ${rangeRow("Credits per discipline range","smallest - largest discipline","minCr","maxCr",v=>fmt(v))}
+
+      ${sec("Discipline balance score")}
+      ${metricRatioRow("Course Coordinators", "rCc", "maxCC")}
+      ${metricRatioRow("Programs", "rProg", "maxProg")}
+      ${metricRatioRow("Staff FTE", "rFte", "maxFte")}
+      ${metricRatioRow("Students", "rSt", "maxSt")}
+      ${metricRatioRow("Credits", "rCr", "maxCr")}
+      ${(()=>{ const bv=T.map(t=>t.n?t.balance:0);
+        return `<tr data-hl="1"><td>Discipline balance score<span class="sub">geometric mean of the ratios above - lower = more balanced (1.0 = perfect)</span></td>`+
+          T.map((t,i)=>`<td${flag(bv,i,true)}>${t.n&&t.balance?fmtRatio(t.balance):"-"}</td>`).join("")+`</tr>`; })()}
+
+      ${sec("Roles & service cost")}
+      ${row("Heads of Discipline","", t=>t.n)}
+      ${row("Course Coordinators","", t=>t.ccs)}
+      ${row("Total leadership roles","incl. HoS + 2 AHoS", t=>t.roles)}
+      ${row("Total service allocation","", t=>fmt1(t.svcTot)+"%")}
+    </table>
+  </div>`;
+}
+
+
+/* ---------------- render: discipline data (a view inside Discipline Comparison) ---------------- */
+let dataSortDisc = {key:"students", dir:-1};
+const expandedDisc = new Set();
+function renderDiscData(container){
+  const el = container || $("#cmp-grid"); if(!el) return;
+  const totalSt = PROGRAMS.reduce((a,p)=>a+p.students,0);
+  const totalFte = PROGRAMS.reduce((a,p)=>a+p.fte,0);
+
+  let rows = S.disciplines.map(d=>{
+    const t = discTotals(d);
+    const spf = t.fte>0 ? t.students/t.fte : 0;
+    return { id:d.id, name:d.name, programs:t.n, ccs:d.ccs.length, students:t.students, fte:t.fte, credits:t.credits,
+      spf, pctSt: totalSt? t.students/totalSt*100:0, pctFte: totalFte? t.fte/totalFte*100:0,
+      progList: d.programIds.map(id=>prog(id)).filter(Boolean) };
+  });
+  const used = assignedIds();
+  const ung = PROGRAMS.filter(p=>!used.has(p.id));
+
+  const gSt = rows.reduce((a,r)=>a+r.students,0), gFte = rows.reduce((a,r)=>a+r.fte,0), gCr = rows.reduce((a,r)=>a+r.credits,0);
+  const gSpf = gFte>0 ? gSt/gFte : 0;
+  const cards = [
+    [S.disciplines.length, "Disciplines"],
+    [PROGRAMS.length - ung.length, "Programs grouped"],
+    [fmt(gSt), "Students"],
+    [fmt1(gFte), "Staff FTE"],
+    [fmt(gCr), "Credit points"],
+    [fmt1(gSpf), "Students per FTE"]
+  ];
+  const hint = ung.length ? `${ung.length} program${ung.length===1?"":"s"} not yet grouped into a discipline` : "every program is grouped into a discipline";
+
+  const k = dataSortDisc.key, dir = dataSortDisc.dir;
+  rows.sort((a,b)=>{
+    let x = k==="name" ? a.name.toLowerCase() : a[k];
+    let y = k==="name" ? b.name.toLowerCase() : b[k];
+    if(x<y) return -dir; if(x>y) return dir; return 0;
+  });
+
+  const cols = [
+    ["name","Discipline"], ["programs","Programs"], ["ccs","Course Coordinators"], ["students","Students"], ["fte","Staff FTE"],
+    ["credits","Credits"], ["spf","Students / FTE"], ["pctSt","% students"], ["pctFte","% FTE"]
+  ];
+  const head = "<tr>" + cols.map(c=>{
+    const on = dataSortDisc.key===c[0];
+    const arr = on ? (dataSortDisc.dir>0?" \u25B2":" \u25BC") : "";
+    return `<th data-sort="${c[0]}" class="${on?"sorted":""}">${c[1]}${arr}</th>`;
+  }).join("") + "</tr>";
+
+  const subTable = (progs, base) => `<table class="ctable">
+      <tr><th>Program</th><th style="text-align:right">Students</th><th style="text-align:right">Staff FTE</th><th style="text-align:right">Credits</th><th style="text-align:right">% of discipline</th></tr>
+      ${progs.map(pg=>`<tr><td class="cname">${esc(pg.name)}</td>
+        <td style="text-align:right">${fmt(pg.students)}</td>
+        <td style="text-align:right">${fmt1(pg.fte)}</td>
+        <td style="text-align:right">${fmt(pg.credits||0)}</td>
+        <td style="text-align:right">${base?fmt1(pg.students/base*100):"0"}%</td></tr>`).join("")}
+    </table>`;
+
+  let body = rows.map(r=>{
+    const open = expandedDisc.has(r.id);
+    const prow = `<tr class="prow" data-dd="${r.id}">
+      <td><span class="pexp">${open?"\u25BE":"\u25B8"}</span>${esc(r.name)}</td>
+      <td>${r.programs}</td>
+      <td>${r.ccs}</td>
+      <td>${fmt(r.students)}</td>
+      <td>${fmt1(r.fte)}</td>
+      <td>${fmt(r.credits)}</td>
+      <td>${fmt1(r.spf)}</td>
+      <td>${fmt1(r.pctSt)}%</td>
+      <td>${fmt1(r.pctFte)}%</td>
+    </tr>`;
+    if(!open) return prow;
+    const comp = r.progList.length
+      ? `<tr class="comp-row"><td colspan="${cols.length}">${subTable(r.progList, r.students)}</td></tr>`
+      : `<tr class="comp-row"><td colspan="${cols.length}"><span class="kol-empty">No programs in this discipline yet.</span></td></tr>`;
+    return prow + comp;
+  }).join("");
+
+  if(ung.length){
+    const open = expandedDisc.has("__ung");
+    const ungSt = ung.reduce((a,p)=>a+p.students,0), ungFte = ung.reduce((a,p)=>a+p.fte,0), ungCr = ung.reduce((a,p)=>a+(p.credits||0),0);
+    const prow = `<tr class="prow" data-dd="__ung" style="color:var(--muted)">
+      <td><span class="pexp">${open?"\u25BE":"\u25B8"}</span><i>Ungrouped</i></td>
+      <td>${ung.length}</td><td>0</td><td>${fmt(ungSt)}</td><td>${fmt1(ungFte)}</td><td>${fmt(ungCr)}</td>
+      <td>${ungFte>0?fmt1(ungSt/ungFte):"0"}</td>
+      <td>${totalSt?fmt1(ungSt/totalSt*100):"0"}%</td><td>${totalFte?fmt1(ungFte/totalFte*100):"0"}%</td></tr>`;
+    body += prow + (open ? `<tr class="comp-row"><td colspan="${cols.length}">${subTable(ung, ungSt)}</td></tr>` : "");
+  }
+
+  const total = `<tr class="total">
+    <td>Grouped total</td><td>${rows.reduce((a,r)=>a+r.programs,0)}</td><td>${rows.reduce((a,r)=>a+r.ccs,0)}</td><td>${fmt(gSt)}</td><td>${fmt1(gFte)}</td>
+    <td>${fmt(gCr)}</td><td>${fmt1(gSpf)}</td>
+    <td>${totalSt?fmt1(gSt/totalSt*100):"0"}%</td><td>${totalFte?fmt1(gFte/totalFte*100):"0"}%</td></tr>`;
+
+  const tableInner = (rows.length || ung.length)
+    ? head + body + total
+    : `<tr><td style="padding:14px; color:var(--muted); font-style:italic">No disciplines yet - build them in the Structure &amp; Chart tab and they will appear here.</td></tr>`;
+
+  el.innerHTML = `
+    <div class="panel" style="margin-bottom:12px;">
+      <div class="panel-head"><h2>Disciplines at a glance</h2><span class="hint">${hint}</span></div>
+      <div class="panel-body"><div class="stats-grid">${cards.map(c=>`<div class="stat-card"><div class="v">${c[0]}</div><div class="l">${c[1]}</div></div>`).join("")}</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-body">
+        <div class="dwrap"><table class="dtable">${tableInner}</table></div>
+        <p class="footer-note"><b>Students / FTE</b> is the student-to-staff ratio for the discipline. Percentages are shares of the school total; if programs are still ungrouped, disciplines will sum to less than 100%.</p>
+      </div>
+    </div>`;
+}
+$("#cmp-grid").addEventListener("click", e=>{
+  const th = e.target.closest("th[data-sort]");
+  if(th){
+    const key = th.dataset.sort;
+    if(dataSortDisc.key===key) dataSortDisc.dir *= -1;
+    else { dataSortDisc.key = key; dataSortDisc.dir = (key==="name") ? 1 : -1; }
+    renderDiscData(); return;
+  }
+  const pr = e.target.closest("tr.prow[data-dd]");
+  if(pr){
+    const id = pr.dataset.dd;
+    if(expandedDisc.has(id)) expandedDisc.delete(id); else expandedDisc.add(id);
+    renderDiscData();
+  }
+});
+
+
+function renderAll(){ renderPool(); renderDiscs(); renderStats(); renderChart(); renderCompare(); renderScenBar(); renderScenCompare(); renderTasks(); save(); }
+
+/* ---------------- drag & drop ---------------- */
+let dragProg=null, dragTask=null;
+document.addEventListener("dragstart", e=>{
+  const chip = e.target.closest && e.target.closest(".chip");
+  const card = e.target.closest && e.target.closest(".task-card");
+  if(chip){ dragProg=chip.dataset.prog; chip.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; }
+  else if(card){ dragTask=card.dataset.task; card.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; }
+});
+document.addEventListener("dragend", e=>{
+  dragProg=null; dragTask=null;
+  $$(".dragging").forEach(el=>el.classList.remove("dragging"));
+  $$(".drag-over").forEach(el=>el.classList.remove("drag-over"));
+});
+function dropTarget(e){
+  return e.target.closest && (e.target.closest("[data-drop]"));
+}
+document.addEventListener("dragover", e=>{
+  const t = dropTarget(e);
+  if(!t) return;
+  const isTaskCol = t.dataset.drop==="task";
+  if((dragProg && !isTaskCol) || (dragTask && isTaskCol)){
+    e.preventDefault(); e.dataTransfer.dropEffect="move";
+    $$(".drag-over").forEach(el=>{ if(el!==t) el.classList.remove("drag-over"); });
+    t.classList.add("drag-over");
+  }
+});
+document.addEventListener("dragleave", e=>{
+  const t = dropTarget(e);
+  if(t && !t.contains(e.relatedTarget)) t.classList.remove("drag-over");
+});
+document.addEventListener("drop", e=>{
+  const t = dropTarget(e);
+  if(!t) return;
+  e.preventDefault();
+  if(dragProg && t.dataset.drop!=="task"){
+    // remove from every discipline, then add to target (unless pool)
+    S.disciplines.forEach(d=>{ d.programIds = d.programIds.filter(id=>id!==dragProg); });
+    if(t.dataset.drop!=="pool"){
+      const d = S.disciplines.find(d=>d.id===t.dataset.drop);
+      if(d) d.programIds.push(dragProg);
+    }
+    renderAll();
+  } else if(dragTask && t.dataset.drop==="task"){
+    const task = S.tasks.find(x=>x.id===dragTask);
+    if(task){ task.assign = t.closest(".kol").dataset.assign; renderAll(); }
+  }
+});
+
+/* ---------------- events ---------------- */
+$("#btn-add-disc").addEventListener("click", ()=>{
+  S.disciplines.push({id:newId(), name:"Discipline "+(S.disciplines.length+1), programIds:[], ccs:[], hodSvc:50});
+  renderAll();
+});
+
+$("#disc-list").addEventListener("input", e=>{
+  const card = e.target.closest(".disc-card"); if(!card) return;
+  const d = S.disciplines.find(x=>x.id===card.dataset.disc); if(!d) return;
+  if(e.target.classList.contains("disc-name")) d.name = e.target.value || "Untitled";
+  if(e.target.classList.contains("hod-svc")) d.hodSvc = +e.target.value || 0;
+  if(e.target.classList.contains("cc-svc")){
+    const i = +e.target.dataset.cc;
+    if(d.ccs[i]) d.ccs[i].svc = +e.target.value || 0;
+  }
+  if(e.target.classList.contains("cc-name")){
+    const i = +e.target.dataset.cc;
+    if(d.ccs[i]) d.ccs[i].name = e.target.value;
+  }
+  save(); renderStats(); renderChart(); renderCompare(); renderScenBar(); renderScenCompare();   // don't re-render the card being typed in
+});
+$("#disc-list").addEventListener("click", e=>{
+  if(e.target.classList.contains("chip-x")){
+    const pid = e.target.closest(".chip").dataset.prog;
+    S.disciplines.forEach(d=>{ d.programIds = d.programIds.filter(id=>id!==pid); });
+    renderAll();
+    return;
+  }
+  const card = e.target.closest(".disc-card"); if(!card) return;
+  const d = S.disciplines.find(x=>x.id===card.dataset.disc); if(!d) return;
+  if(e.target.classList.contains("cc-add")){ d.ccs.push({name:"", svc:20}); renderAll(); return; }
+  if(e.target.classList.contains("cc-del")){ d.ccs.splice(+e.target.dataset.cc, 1); renderAll(); return; }
+  if(!e.target.classList.contains("disc-del")) return;
+  if(d.programIds.length===0 || confirm(`Delete "${d.name}"? Its ${d.programIds.length} program(s) will return to the pool.`)){
+    S.disciplines = S.disciplines.filter(x=>x!==d);
+    renderAll();
+  }
+});
+
+$("#lead-table").addEventListener("input", e=>{
+  const k = e.target.dataset.exec; if(!k) return;
+  S.exec[k] = +e.target.value || 0;
+  save(); renderChart();
+  // update only the total row without rebuilding (keeps focus)
+  const nDisc=S.disciplines.length, nCC=S.disciplines.reduce((a,d)=>a+d.ccs.length,0);
+  const hodSvc=S.disciplines.reduce((a,d)=>a+(+d.hodSvc||0),0), ccSvc=S.disciplines.reduce((a,d)=>a+d.ccs.reduce((x,c)=>x+(+c.svc||0),0),0);
+  const tot=(+S.exec.hosSvc||0)+(+S.exec.ahosEduSvc||0)+(+S.exec.ahosResSvc||0)+hodSvc+ccSvc;
+  const row=$("#lead-table tr.total");
+  if(row) row.innerHTML=`<td>All leadership roles</td><td class="num">${3+nDisc+nCC}</td><td class="num">${fmt1(tot)}%</td>`;
+});
+
+$("#cat-filters").addEventListener("click", e=>{
+  const b = e.target.closest(".cat-filter"); if(!b) return;
+  S.catFilter = b.dataset.cat; save(); renderTasks();
+});
+
+/* task column actions: per-card ✕ and Clear all */
+$(".kanban").addEventListener("click", e=>{
+  if(e.target.classList.contains("task-x")){
+    const id = e.target.closest(".task-card").dataset.task;
+    const t = S.tasks.find(x=>x.id===id);
+    if(t){ t.assign = "none"; save(); renderTasks(); }
+    return;
+  }
+  if(e.target.classList.contains("kol-clear")){
+    const a = e.target.closest(".kol").dataset.assign;
+    const n = S.tasks.filter(t=>t.assign===a).length;
+    if(n && confirm(`Move all ${n} task(s) in this column back to Unassigned?`)){
+      S.tasks.forEach(t=>{ if(t.assign===a) t.assign="none"; });
+      save(); renderTasks();
+    }
+  }
+});
+
+/* tabs */
+$$(".tab-btn").forEach(b=>b.addEventListener("click", ()=>{
+  $$(".tab-btn").forEach(x=>x.classList.toggle("active", x===b));
+  $$(".tab-page").forEach(p=>p.classList.toggle("active", p.id==="tab-"+b.dataset.tab));
+  if(b.dataset.tab==="compare"){ S.cmpView = "data"; save(); renderCompare(); }
+}));
+
+/* export / import / reset */
+$("#btn-export").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(S,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "soabe-org-design-" + new Date().toISOString().slice(0,10) + ".json";
+  a.click(); URL.revokeObjectURL(a.href);
+});
+$("#btn-import").addEventListener("click", ()=>$("#import-file").click());
+$("#import-file").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{ applyImported(JSON.parse(r.result)); }
+    catch(err){ alert("That file doesn't look like a dashboard export."); }
+  };
+  r.readAsText(f);
+  e.target.value = "";
+});
+$("#btn-reset").addEventListener("click", ()=>{
+  if(confirm("Reset everything? All disciplines, service loads and task allocations will be cleared.")){
+    S = defaultState(); renderAll();
+  }
+});
+
+/* ---------------- Excel export ---------------- */
+function loadXLSXLib(){
+  return new Promise((res, rej)=>{
+    if(window.XLSX) return res();
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+$("#btn-excel").addEventListener("click", async ()=>{
+  try{ await loadXLSXLib(); }
+  catch(e){ alert("Excel export needs an internet connection the first time (it loads a small library). Please try again when online."); return; }
+  const wb = XLSX.utils.book_new();
+
+  // ----- Sheet 1: Source Data (mirrors the Source Data tab: programs + course composition) -----
+  const sdTotSt = PROGRAMS.reduce((a,p)=>a+p.students,0);
+  const sdTotFte = PROGRAMS.reduce((a,p)=>a+p.fte,0);
+  const sdTotCr = PROGRAMS.reduce((a,p)=>a+(p.credits||0),0);
+  const sdTotCourses = PROGRAMS.reduce((a,p)=>a+((COMPOSITION[p.id]||[]).length),0);
+  const sdSpf = sdTotFte>0 ? sdTotSt/sdTotFte : 0;
+  const r1 = n => Math.round(n*10)/10;
+  const sd = [["Program / course code","Course name","Students","Staff FTE","Credits","Students per FTE","% of school students","% of school FTE","% of program"]];
+  PROGRAMS.forEach(p=>{
+    const spf = p.fte>0 ? p.students/p.fte : 0;
+    sd.push([p.name, "", p.students, r1(p.fte), p.credits||0, r1(spf),
+             r1(sdTotSt?p.students/sdTotSt*100:0), r1(sdTotFte?p.fte/sdTotFte*100:0), ""]);
+    (COMPOSITION[p.id]||[]).forEach(c=>{
+      sd.push(["    "+c[0], c[1], c[2], "", "", "", "", "", r1(p.students?c[2]/p.students*100:0)]);
+    });
+  });
+  sd.push(["School total", "", sdTotSt, r1(sdTotFte), sdTotCr, r1(sdSpf), 100, 100, ""]);
+  const ws0 = XLSX.utils.aoa_to_sheet(sd);
+  ws0["!cols"] = [{wch:40},{wch:46},{wch:10},{wch:10},{wch:9},{wch:16},{wch:18},{wch:16},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws0, "Source Data");
+
+  const nDisc = S.disciplines.length, nCC = S.disciplines.reduce((a,d)=>a+d.ccs.length,0);
+  const hodSvc = S.disciplines.reduce((a,d)=>a+(+d.hodSvc||0),0);
+  const ccSvc  = S.disciplines.reduce((a,d)=>a+d.ccs.reduce((x,c)=>x+(+c.svc||0),0),0);
+  const e = S.exec;
+
+  const lead = [
+    ["Role","Count","Total service %"],
+    ["Head of School",1,+e.hosSvc||0],
+    ["Associate Head of School - Education & Students",1,+e.ahosEduSvc||0],
+    ["Associate Head of School - Research",1,+e.ahosResSvc||0],
+    ["Heads of Discipline",nDisc,hodSvc],
+    ["Course Coordinators",nCC,ccSvc],
+    ["All leadership roles",3+nDisc+nCC,(+e.hosSvc||0)+(+e.ahosEduSvc||0)+(+e.ahosResSvc||0)+hodSvc+ccSvc]
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(lead);
+  ws1["!cols"] = [{wch:46},{wch:8},{wch:15}];
+  XLSX.utils.book_append_sheet(wb, ws1, "Leadership & Service");
+
+  const disc = [["Discipline","Programs","Students","Credit points","Staff FTE","HoD service %","CCs","CC names","CC service % (each)","CC service % (total)"],
+    ...S.disciplines.map(d=>{
+      const t = discTotals(d);
+      return [d.name, t.n, t.students, t.credits, Math.round(t.fte*100)/100, +d.hodSvc||0,
+              d.ccs.length,
+              d.ccs.map(c=>c.name||"-").join(", "),
+              d.ccs.map(c=>+c.svc||0).join(", "),
+              d.ccs.reduce((x,c)=>x+(+c.svc||0),0)];
+    })];
+
+  const ws2 = XLSX.utils.aoa_to_sheet(disc);
+  ws2["!cols"] = [{wch:32},{wch:9},{wch:9},{wch:13},{wch:9},{wch:13},{wch:5},{wch:28},{wch:18},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws2, "Disciplines");
+
+  const progs = [["Program","Students (2026)","Credit points","Staff FTE","Discipline"],
+    ...PROGRAMS.map(p=>{
+      const d = S.disciplines.find(d=>d.programIds.includes(p.id));
+      return [p.name, p.students, p.credits, p.fte, d ? d.name : "Ungrouped"];
+    })];
+  const ws3 = XLSX.utils.aoa_to_sheet(progs);
+  ws3["!cols"] = [{wch:34},{wch:14},{wch:13},{wch:9},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, ws3, "Programs");
+
+  const label = {none:"Unassigned", ahos:"AHoS - Education & Students", hod:"Head of Discipline", cc:"Course Coordinator"};
+  const taskRows = [["Category","Task","Allocated to"],
+    ...S.tasks.map(t=>[t.cat, t.text, label[t.assign] || "Unassigned"])];
+  const ws4 = XLSX.utils.aoa_to_sheet(taskRows);
+  ws4["!cols"] = [{wch:26},{wch:90},{wch:26}];
+  XLSX.utils.book_append_sheet(wb, ws4, "Task Distribution");
+
+  syncActive();
+  const scRows = [["Metric", ...S.scenarios.map(sc=>sc.name)]];
+  const ST = S.scenarios.map(scenTotals);
+  const addRow = (label, fn) => scRows.push([label, ...ST.map(fn)]);
+  addRow("Disciplines", t=>t.n);
+  addRow("Programs grouped (of "+PROGRAMS.length+")", t=>t.grouped);
+  addRow("Staff FTE - largest discipline", t=>Math.round(t.maxFte*100)/100);
+  addRow("Staff FTE - smallest discipline", t=>Math.round(t.minFte*100)/100);
+  addRow("Staff FTE spread (largest : smallest)", t=>Math.round(t.ratioFte*100)/100);
+  addRow("Students - largest discipline", t=>t.maxSt);
+  addRow("Students - smallest discipline", t=>t.minSt);
+  addRow("Student spread (largest : smallest)", t=>Math.round(t.ratioSt*100)/100);
+  addRow("Heads of Discipline", t=>t.n);
+  addRow("Course Coordinators", t=>t.ccs);
+  addRow("Total leadership roles", t=>t.roles);
+  addRow("Total service %", t=>Math.round(t.svcTot*100)/100);
+  scRows.push([]);
+  scRows.push(["Discipline detail (per scenario)"]);
+  S.scenarios.forEach((sc,i)=>{
+    scRows.push([sc.name, "Programs","Students","Credits","Staff FTE","Service %"]);
+    ST[i].rows.forEach(r=>scRows.push(["  "+r.name, r.programs, r.students, r.credits, Math.round(r.fte*100)/100, r.svc]));
+  });
+  const ws5 = XLSX.utils.aoa_to_sheet(scRows);
+  ws5["!cols"] = [{wch:40}, ...S.scenarios.map(()=>({wch:20})), {wch:12},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws5, "Scenarios");
+
+  XLSX.writeFile(wb, "soabe-org-design-" + new Date().toISOString().slice(0,10) + ".xlsx");
+});
+
+/* ---------------- org chart -> canvas (shared by JPEG export and PDF report) ---------------- */
+function orgChartCanvas(ds, exec){
+  ds = ds || S.disciplines; exec = exec || S.exec;
+  const C = {hos:"#0f4a62", ahos:"#16607e", hodBorder:"#16607e", ccFill:"#e3eef3", ccBorder:"#4a8caa",
+             ink:"#152936", teal:"#0f4a62", line:"#8fb0bf", white:"#ffffff"};
+  const BW=158, COL=174;
+  const CCW=142, CGAP=12;
+  const yHos=12,hHos=54, yRow=120, hHod=104, hAhos=64, hCc=72;
+  const yCc = yRow + hHod + 36;
+  const n = ds.length;
+  const peers = n + 2;
+  const colC = i => i*COL + COL/2;
+  const centers = ds.map((d,i)=>colC(i));
+  const eduC = colC(n), resC = colC(n+1);
+  const busXs = colC(0), busXe = colC(peers-1);
+  const hosC = (busXs + busXe)/2;
+  const W = Math.ceil(peers*COL);
+  const maxCC = ds.reduce((a,d)=>Math.max(a, d.ccs.length), 0);
+  const H = maxCC>0 ? yCc + maxCC*(hCc+CGAP) : yRow + hHod + 12;
+
+  const SCALE=3, PAD=24;
+  const cv = document.createElement("canvas");
+  cv.width = (W+PAD*2)*SCALE; cv.height = (H+PAD*2)*SCALE;
+  const x = cv.getContext("2d");
+  x.fillStyle = C.white; x.fillRect(0,0,cv.width,cv.height);
+  x.scale(SCALE,SCALE); x.translate(PAD,PAD);
+  const FF = '"Segoe UI", Arial, sans-serif';
+
+  function rr(px,py,w,h,r){
+    x.beginPath();
+    x.moveTo(px+r,py); x.arcTo(px+w,py,px+w,py+h,r); x.arcTo(px+w,py+h,px,py+h,r);
+    x.arcTo(px,py+h,px,py,r); x.arcTo(px,py,px+w,py,r); x.closePath();
+  }
+  function wrapText(text, font, maxW){
+    x.font = font;
+    const words = String(text).split(/\s+/), out = [];
+    let line = "";
+    words.forEach(w=>{
+      const t = line ? line+" "+w : w;
+      if(x.measureText(t).width > maxW && line){ out.push(line); line = w; }
+      else line = t;
+    });
+    if(line) out.push(line);
+    return out;
+  }
+  function drawBox(cx, y, w, h, fill, border, rows){
+    rr(cx-w/2, y, w, h, 7);
+    if(fill){ x.fillStyle = fill; x.fill(); }
+    if(border){ x.strokeStyle = border; x.lineWidth = 2; x.stroke(); }
+    const flat = [];
+    rows.forEach(r=>{
+      wrapText(r.t, r.font, w-16).forEach(l=>flat.push({t:l, font:r.font, color:r.color, lh:r.lh}));
+    });
+    const totalH = flat.reduce((a,r)=>a+r.lh, 0);
+    let ty = y + (h-totalH)/2;
+    x.textAlign = "center"; x.textBaseline = "middle";
+    flat.forEach(r=>{
+      x.font = r.font; x.fillStyle = r.color;
+      x.fillText(r.t, cx, ty + r.lh/2);
+      ty += r.lh;
+    });
+  }
+  function conn(d){ x.strokeStyle=C.line; x.lineWidth=1.6; x.beginPath(); d(); x.stroke(); }
+
+  const busY = (yHos+hHos+yRow)/2;
+  conn(()=>{
+    x.moveTo(hosC,yHos+hHos); x.lineTo(hosC,busY);
+    x.moveTo(busXs,busY); x.lineTo(busXe,busY);
+    [...centers, eduC, resC].forEach(cx=>{ x.moveTo(cx,busY); x.lineTo(cx,yRow); });
+    ds.forEach((d,i)=>{
+      const cx = centers[i];
+      if(d.ccs.length){
+        const bx = cx + 12, trunkX = bx - CCW/2 - 12;
+        const lastMid = yCc + (d.ccs.length-1)*(hCc+CGAP) + hCc/2;
+        x.moveTo(trunkX,yRow+hHod); x.lineTo(trunkX,lastMid);
+        d.ccs.forEach((c,k)=>{
+          const midY = yCc + k*(hCc+CGAP) + hCc/2;
+          x.moveTo(trunkX,midY); x.lineTo(bx-CCW/2,midY);
+        });
+      }
+    });
+  });
+
+  const fRole='700 11px '+FF, fName='600 12px '+FF, fMeta='400 10.5px '+FF;
+  drawBox(hosC,yHos,BW,hHos,C.hos,null,[{t:"Head of School",font:fRole,color:"#fff",lh:14}]);
+  drawBox(eduC,yRow,BW,hAhos,C.ahos,null,[
+    {t:"Associate Head of School",font:fRole,color:"#fff",lh:14},
+    {t:"Education & Students",font:fName,color:"#fff",lh:15},
+    ...(+exec.ahosEduSvc>0 ? [{t:fmt1(+exec.ahosEduSvc)+"% svc",font:fMeta,color:"#e0ecf2",lh:13}] : [])
+  ]);
+  drawBox(resC,yRow,BW,hAhos,C.ahos,null,[
+    {t:"Associate Head of School",font:fRole,color:"#fff",lh:14},
+    {t:"Research",font:fName,color:"#fff",lh:15},
+    ...(+exec.ahosResSvc>0 ? [{t:fmt1(+exec.ahosResSvc)+"% svc",font:fMeta,color:"#e0ecf2",lh:13}] : [])
+  ]);
+  ds.forEach((d,i)=>{
+    const cx = centers[i], t = discTotals(d);
+    drawBox(cx,yRow,BW,hHod,"#fff",C.hodBorder,[
+      {t:"Head of Discipline",font:fRole,color:C.teal,lh:14},
+      {t:d.name,font:fName,color:C.ink,lh:15},
+      {t:`${t.n} program${t.n===1?"":"s"} · ${fmt(t.students)} students`,font:fMeta,color:"#44606e",lh:13},
+      {t:fmt(t.credits)+" credits · "+fmt1(t.fte)+" FTE"+(+d.hodSvc>0?` · ${fmt1(+d.hodSvc)}% svc`:""),font:fMeta,color:"#44606e",lh:13}
+    ]);
+    if(d.ccs.length){
+      const bx = cx + 12;
+      d.ccs.forEach((c,k)=>{
+        const y0 = yCc + k*(hCc+CGAP);
+        drawBox(bx,y0,CCW,hCc,C.ccFill,C.ccBorder,[
+          {t:"Course Coordinator",font:fRole,color:C.teal,lh:14},
+          {t:c.name || d.name,font:fName,color:C.ink,lh:15},
+          ...(+c.svc>0 ? [{t:fmt1(+c.svc)+"% svc",font:fMeta,color:"#44606e",lh:13}] : [])
+        ]);
+      });
+    }
+  });
+
+  return cv;
+}
+$("#btn-jpeg").addEventListener("click", ()=>{
+  const cv = orgChartCanvas(S.disciplines, S.exec);
+  cv.toBlob(b=>{
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = "soabe-org-chart-" + new Date().toISOString().slice(0,10) + ".jpg";
+    a.click(); URL.revokeObjectURL(a.href);
+  }, "image/jpeg", 0.95);
+});
+
+/* ---------------- chart pan / zoom / fit ---------------- */
+function clampPan(){
+  const Z = S.chartZoom||1, vw = chartW/Z, vh = chartH/Z;
+  // keep the view inside the chart; at 100% the chart is fully visible so panning locks
+  S.panX = vw >= chartW ? 0 : Math.min(chartW - vw, Math.max(0, S.panX||0));
+  S.panY = vh >= chartH ? 0 : Math.min(chartH - vh, Math.max(0, S.panY||0));
+}
+function updateViewBox(){
+  const svg = $("#org-svg"); if(!svg) return;
+  const Z = S.chartZoom||1;
+  svg.setAttribute("viewBox", `${S.panX} ${S.panY} ${chartW/Z} ${chartH/Z}`);
+}
+function zoomLabel(){ $("#zoom-pct").textContent = Math.round((S.chartZoom||1)*100)+"%"; }
+function setZoom(z){
+  const Z0 = S.chartZoom||1;
+  const Z1 = Math.min(4, Math.max(1, Math.round(z*100)/100));
+  // keep the view centred on the same point while zooming
+  const cx = (S.panX||0) + chartW/(2*Z0), cy = (S.panY||0) + chartH/(2*Z0);
+  S.chartZoom = Z1;
+  S.panX = cx - chartW/(2*Z1);
+  S.panY = cy - chartH/(2*Z1);
+  clampPan(); save(); updateViewBox(); zoomLabel();
+}
+function fitChart(){ S.chartZoom = 1; S.panX = 0; S.panY = 0; save(); updateViewBox(); zoomLabel(); }
+$("#zoom-in").addEventListener("click", ()=>setZoom((S.chartZoom||1)*1.25));
+$("#zoom-out").addEventListener("click", ()=>setZoom((S.chartZoom||1)/1.25));
+$("#btn-fit").addEventListener("click", fitChart);
+$("#zoom-pct").addEventListener("click", fitChart);
+
+const cwrap = $("#chart-wrap");
+let panDrag = null;
+cwrap.addEventListener("pointerdown", e=>{
+  const svg = $("#org-svg"); if(!svg) return;
+  e.preventDefault();
+  panDrag = { x:e.clientX, y:e.clientY, px:S.panX||0, py:S.panY||0,
+              w:svg.getBoundingClientRect().width };
+  svg.classList.add("panning");
+  try{ cwrap.setPointerCapture(e.pointerId); }catch(err){}
+});
+cwrap.addEventListener("pointermove", e=>{
+  if(!panDrag) return;
+  const Z = S.chartZoom||1;
+  const factor = (chartW/Z) / Math.max(1, panDrag.w);
+  S.panX = panDrag.px - (e.clientX - panDrag.x)*factor;
+  S.panY = panDrag.py - (e.clientY - panDrag.y)*factor;
+  clampPan(); updateViewBox();
+});
+["pointerup","pointercancel"].forEach(ev=>cwrap.addEventListener(ev, ()=>{
+  if(!panDrag) return;
+  panDrag = null; save();
+  const svg = $("#org-svg"); if(svg) svg.classList.remove("panning");
+}));
+cwrap.addEventListener("wheel", e=>{
+  if(!e.ctrlKey) return;              // plain scroll keeps scrolling the page
+  e.preventDefault();
+  setZoom((S.chartZoom||1) * (e.deltaY < 0 ? 1.15 : 1/1.15));
+}, {passive:false});
+
+/* ---------------- render: source data tab ---------------- */
+const COMPOSITION = {
+  p01:[["C10214","Bachelor of Construction Project Management",844], ["C10215","Bachelor of Construction Project Management Bachelor of International Studies",8]],
+  p02:[["C11276","Graduate Certificate in Construction Management",3], ["C06126","Graduate Diploma in Construction Management",11]],
+  p03:[["C11005","Graduate Certificate in Project Management",3], ["C04006","Master of Project Management",49], ["C04317","Master of Property Development and Project Management",70]],
+  p04:[["C10310","Bachelor of Property Economics",480], ["C10320","Bachelor of Property Economics Bachelor of International Studies",13]],
+  p05:[["C11271","Graduate Certificate in Property Development",15], ["C06006","Graduate Diploma in Property Development",5], ["C04008","Master of Property Development",26]],
+  p06:[["C11312","Graduate Certificate in Planning",0], ["C11270","Graduate Certificate in Planning",8], ["C07002","Graduate Diploma in Planning",0], ["C04007","Master of Planning",34], ["C04316","Master of Property Development and Planning",14]],
+  p07:[["C04294","Master of Real Estate Investment",10], ["C04315","Master of Property Development and Investment",25]],
+  p08:[["C11356","Graduate Certificate in Property Development",88], ["C04445","Master of Property Development",108]],
+  p09:[["C11343","Graduate Certificate in Urban Planning and Design",51], ["C04439","Master of Urban Design",13], ["C04441","Master of Urban Planning",46]],
+  p10:[["C09048","Bachelor of Design (Honours) in Architecture",20], ["C10004","Bachelor of Design in Architecture",585], ["C10325","Bachelor of Design in Architecture Bachelor of Creative Intelligence and Innovation",27], ["C10413","Bachelor of Design in Architecture Master of Architecture",77]],
+  p11:[["C04235","Master of Architecture",256]],
+  p12:[["C09079","Bachelor of Landscape Architecture (Honours)",161], ["C11275","Graduate Certificate in Landscape Architecture",0], ["C06125","Graduate Diploma in Landscape Architecture",2], ["C04270","Master of Landscape Architecture",10]],
+  p13:[["C10271","Bachelor of Design in Interior Architecture",434], ["C10272","Bachelor of Design in Interior Architecture Bachelor of International Studies",21], ["C10322","Bachelor of Design in Interior Architecture Bachelor of Creative Intelligence and Innovation",25]],
+  p14:[["C10446","Bachelor of Criminology",160], ["C10447","Bachelor of Criminology Bachelor of International Studies",28], ["C10448","Bachelor of Criminology Bachelor of Forensic Science",200], ["C10472","Bachelor of Criminology Bachelor of Cybersecurity",74], ["C10478","Bachelor of Psychology Bachelor of Criminology (owned by Graduate School of Health)",197]],
+};
+let dataSort = {key:"students", dir:-1};
+const expandedData = new Set();
+function renderData(){
+  const totalSt = PROGRAMS.reduce((a,p)=>a+p.students,0);
+  const totalFte = PROGRAMS.reduce((a,p)=>a+p.fte,0);
+  const totalCr = PROGRAMS.reduce((a,p)=>a+(p.credits||0),0);
+  const totalCourses = PROGRAMS.reduce((a,p)=>a+((COMPOSITION[p.id]||[]).length),0);
+  const schoolSpf = totalFte>0 ? totalSt/totalFte : 0;
+
+  const cards = [
+    [PROGRAMS.length, "Programs"],
+    [totalCourses, "Courses"],
+    [fmt(totalSt), "Students"],
+    [fmt1(totalFte), "Staff FTE"],
+    [fmt(totalCr), "Credit points"],
+    [fmt1(schoolSpf), "Students per FTE (school)"]
+  ];
+  $("#data-stats").innerHTML = cards.map(c=>`<div class="stat-card"><div class="v">${c[0]}</div><div class="l">${c[1]}</div></div>`).join("");
+
+  let rows = PROGRAMS.map(p=>{
+    const comp = COMPOSITION[p.id] || [];
+    const spf = p.fte>0 ? p.students/p.fte : 0;
+    return { p, comp, courses:comp.length, students:p.students, fte:p.fte, credits:p.credits||0,
+      spf, pctSt: totalSt? p.students/totalSt*100:0, pctFte: totalFte? p.fte/totalFte*100:0,
+      load: schoolSpf>0 ? spf/schoolSpf : 0 };
+  });
+  const k = dataSort.key, dir = dataSort.dir;
+  rows.sort((a,b)=>{
+    let x = k==="name" ? a.p.name.toLowerCase() : a[k];
+    let y = k==="name" ? b.p.name.toLowerCase() : b[k];
+    if(x<y) return -dir; if(x>y) return dir; return 0;
+  });
+
+  const cols = [
+    ["name","Program"], ["courses","Courses"], ["students","Students"], ["fte","Staff FTE"],
+    ["credits","Credits"], ["spf","Students / FTE"], ["pctSt","% students"], ["pctFte","% FTE"]
+  ];
+  const head = "<tr>" + cols.map(c=>{
+    const on = dataSort.key===c[0];
+    const arr = on ? (dataSort.dir>0?" \u25B2":" \u25BC") : "";
+    return `<th data-sort="${c[0]}" class="${on?"sorted":""}">${c[1]}${arr}</th>`;
+  }).join("") + "</tr>";
+
+  const body = rows.map(r=>{
+    const open = expandedData.has(r.p.id);
+    const prow = `<tr class="prow" data-prog="${r.p.id}">
+      <td><span class="pexp">${open?"\u25BE":"\u25B8"}</span>${esc(r.p.name)}</td>
+      <td>${r.courses}</td>
+      <td>${fmt(r.students)}</td>
+      <td>${fmt1(r.fte)}</td>
+      <td>${fmt(r.credits)}</td>
+      <td>${fmt1(r.spf)}</td>
+      <td>${fmt1(r.pctSt)}%</td>
+      <td>${fmt1(r.pctFte)}%</td>
+    </tr>`;
+    if(!open) return prow;
+    const comp = `<tr class="comp-row"><td colspan="${cols.length}">
+      <table class="ctable">
+        <tr><th>Code</th><th>Course</th><th>Students</th><th>% of program</th></tr>
+        ${r.comp.map(c=>`<tr><td class="ccode">${esc(c[0])}</td><td class="cname">${esc(c[1])}</td>
+           <td>${fmt(c[2])}</td><td>${r.students?fmt1(c[2]/r.students*100):"0"}%</td></tr>`).join("")}
+      </table></td></tr>`;
+    return prow + comp;
+  }).join("");
+
+  const total = `<tr class="total">
+    <td>School total</td><td>${totalCourses}</td><td>${fmt(totalSt)}</td><td>${fmt1(totalFte)}</td>
+    <td>${fmt(totalCr)}</td><td>${fmt1(schoolSpf)}</td><td>100%</td><td>100%</td></tr>`;
+
+  $("#data-table").innerHTML = head + body + total;
+  $("#data-legend").innerHTML =
+    "<b>Students / FTE</b> is the student-to-staff ratio (students per academic FTE). Staff FTE excludes casual staff.";
+}
+$("#tab-data").addEventListener("click", e=>{
+  const th = e.target.closest("th[data-sort]");
+  if(th){
+    const key = th.dataset.sort;
+    if(dataSort.key===key) dataSort.dir *= -1;
+    else { dataSort.key = key; dataSort.dir = (key==="name") ? 1 : -1; }
+    renderData(); return;
+  }
+  const pr = e.target.closest("tr.prow");
+  if(pr){
+    const id = pr.dataset.prog;
+    if(expandedData.has(id)) expandedData.delete(id); else expandedData.add(id);
+    renderData();
+  }
+});
+
+
+/* ================================================================
+   PDF REPORT EXPORT
+   Loads jsPDF + AutoTable on demand (same pattern as the Excel export).
+   Report = cover -> source data -> 1-2 pages per selected scenario
+            -> comparative analysis -> task allocation.
+================================================================ */
+function loadScript(src){
+  return new Promise((res,rej)=>{
+    const s=document.createElement("script");
+    s.src=src; s.onload=()=>res(); s.onerror=()=>rej(new Error("Failed to load "+src));
+    document.head.appendChild(s);
+  });
+}
+async function loadPDFLib(){
+  if(!(window.jspdf && window.jspdf.jsPDF))
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+  const JS = window.jspdf && window.jspdf.jsPDF;
+  if(!JS) throw new Error("jsPDF did not load");
+  if(!JS.API.autoTable)
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+}
+
+async function generateReport(scenIds, opts){
+  await loadPDFLib();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:"pt", format:"a4", orientation:"portrait"});
+
+  /* ---- theme ---- */
+  const TEAL=[22,96,126], TEALD=[15,74,98], INK=[21,41,54], MUTED=[91,113,128],
+        LINE=[213,224,230], LIGHT=[227,238,243], WHITE=[255,255,255],
+        GREEN=[46,125,91], AMBER=[185,122,31], SUB=[210,226,236],
+        SRC=[106,90,158], SRCLIGHT=[238,235,247];        // source-data header colour (violet) - stands apart from teal
+  const M = 40;
+  const W = () => doc.internal.pageSize.getWidth();
+  const H = () => doc.internal.pageSize.getHeight();
+  const contentW = () => W()-M*2;
+  const setFill = c => doc.setFillColor(c[0],c[1],c[2]);
+  const setText = c => doc.setTextColor(c[0],c[1],c[2]);
+  const setDraw = c => doc.setDrawColor(c[0],c[1],c[2]);
+  const fmtRatio = v => { const r=Math.round(v*10)/10; return Number.isInteger(r)?String(r):r.toFixed(1); };
+  const hex2rgb = h => [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  const DISC_COLORS = CMP_COLORS.map(hex2rgb);
+  const METRICS = [
+    {key:"students", label:"Students",             color:[22,96,126]},
+    {key:"fte",      label:"Staff FTE",            color:[74,140,170]},
+    {key:"credits",  label:"Credit points",        color:[176,73,47]},
+    {key:"programs", label:"Programs",             color:[84,112,126]},
+    {key:"ccs",      label:"Course Coordinators",  color:[46,125,91]},
+    {key:"svc",      label:"Service allocation",   color:[185,122,31]},
+    {key:"perFte",   label:"Students / FTE",       color:[106,90,158]}
+  ];
+
+  function banner(title, sub, fill){
+    setFill(fill||TEALD); doc.rect(0,0,W(),56,'F');
+    setText(WHITE); doc.setFont('helvetica','bold'); doc.setFontSize(15);
+    doc.text(title, M, 27);
+    if(sub){ doc.setFont('helvetica','normal'); doc.setFontSize(9.5); setText(SUB); doc.text(sub, M, 44); }
+    return 78;
+  }
+  function tableTitle(txt, y){
+    setText(TEALD); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
+    doc.text(txt, M, y); return y+8;
+  }
+  function statTiles(items, y){
+    const gap=8, n=items.length, tw=(contentW()-gap*(n-1))/n, th=48;
+    items.forEach((it,i)=>{
+      const x=M+i*(tw+gap);
+      setFill(LIGHT); doc.roundedRect(x,y,tw,th,5,5,'F');
+      setText(TEALD); doc.setFont('helvetica','bold'); doc.setFontSize(14);
+      doc.text(String(it[0]), x+9, y+21);
+      setText(MUTED); doc.setFont('helvetica','normal'); doc.setFontSize(7);
+      doc.text(doc.splitTextToSize(String(it[1]).toUpperCase(), tw-14), x+9, y+34);
+    });
+    return y+th;
+  }
+  function table(cfg){
+    doc.autoTable(Object.assign({
+      margin:{left:M, right:M},
+      styles:{fontSize:8, cellPadding:3.5, lineColor:LINE, lineWidth:0.5, textColor:INK, overflow:'linebreak'},
+      headStyles:{fillColor:TEAL, textColor:255, fontStyle:'bold', fontSize:8},
+      footStyles:{fillColor:LIGHT, textColor:TEALD, fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[247,250,251]},
+      theme:'grid',
+      didParseCell:d=>{ if(d.section==='foot' && d.column.index>=1) d.cell.styles.halign='right'; }
+    }, cfg));
+    return doc.lastAutoTable.finalY;
+  }
+  const rightCols = (from, to) => { const o={}; for(let i=from;i<=to;i++) o[i]={halign:'right'}; return o; };
+
+  function legendRow(x, y, items, maxX){
+    let lx=x, ly=y;
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+    items.forEach(it=>{
+      const tw=doc.getTextWidth(it.label), need=11+tw+14;
+      if(lx+need > maxX){ lx=x; ly+=13; }
+      setFill(it.color); doc.rect(lx, ly-6, 8, 8, 'F');
+      setText(INK); doc.text(it.label, lx+11, ly);
+      lx += need;
+    });
+    return ly;
+  }
+  function groupedBars(x, y, w, h, groups){
+    const base=y+h-16, bh=h-18;
+    setDraw(LINE); doc.setLineWidth(0.5); doc.line(x, base, x+w, base);
+    const gGap=Math.max(20, w*0.035), gW=(w-gGap*(groups.length-1))/groups.length;
+    groups.forEach((g,gi)=>{
+      const gx=x+gi*(gW+gGap), bn=g.bars.length, bGap=2, bw=Math.max(2,(gW-bGap*(bn-1))/bn);
+      g.bars.forEach((b,bi)=>{
+        const bx=gx+bi*(bw+bGap), hh=Math.max(0, (isFinite(b.frac)?b.frac:0)*bh);
+        setFill(b.color); doc.rect(bx, base-hh, bw, hh, 'F');
+      });
+      setText(TEALD); doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
+      doc.text(doc.splitTextToSize(g.label, gW+6), gx+gW/2, base+8, {align:'center'});
+    });
+  }
+
+  /* ---- gather data ---- */
+  syncActive();
+  const scs = S.scenarios.filter(sc=>scenIds.includes(sc.id));
+  const totalSt = PROGRAMS.reduce((a,p)=>a+p.students,0);
+  const totalFte = PROGRAMS.reduce((a,p)=>a+p.fte,0);
+  const totalCr = PROGRAMS.reduce((a,p)=>a+(p.credits||0),0);
+  const totalCourses = PROGRAMS.reduce((a,p)=>a+((COMPOSITION[p.id]||[]).length),0);
+  const schoolSpf = totalFte>0 ? totalSt/totalFte : 0;
+  const dstamp = new Date();
+  const dnice = dstamp.toLocaleDateString('en-AU',{day:'numeric',month:'long',year:'numeric'});
+  const tocEntries = [];   // {label, page}
+
+  /* ============ COVER (top part now; "What's inside" filled in after the body) ============ */
+  setFill(TEALD); doc.rect(0,0,W(),150,'F');
+  setText(WHITE); doc.setFont('helvetica','bold'); doc.setFontSize(24);
+  doc.text("Organisation Design Report", M, 80);
+  doc.setFont('helvetica','normal'); doc.setFontSize(13); setText(SUB);
+  doc.text("School of Architecture & Built Environment", M, 108);
+
+  let cy=190;
+  setText(MUTED); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.text("PREPARED", M, cy);
+  setText(INK); doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  doc.text(dnice, M+66, cy);
+
+  cy+=30;
+  setText(TEALD); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text("Scenarios in this report", M, cy);
+  cy+=6; setDraw(LINE); doc.setLineWidth(0.6); doc.line(M, cy, W()-M, cy); cy+=20;
+  scs.forEach(sc=>{
+    const t=scenTotals(sc);
+    setText(INK); doc.setFont('helvetica','bold'); doc.setFontSize(10.5);
+    doc.text("•  "+sc.name, M+4, cy);
+    setText(MUTED); doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+    doc.text(`${t.n} disciplines  ·  ${t.ccs} course coordinators  ·  ${t.roles} roles  ·  ${fmt1(t.svcTot)}% service`, M+180, cy);
+    cy+=20;
+  });
+
+  cy+=16;
+  setText(TEALD); doc.setFont('helvetica','bold'); doc.setFontSize(12);
+  doc.text("What's inside", M, cy);
+  cy+=6; doc.line(M, cy, W()-M, cy); cy+=20;
+  const tocStartY = cy;   // TOC lines drawn here after the body is built
+
+  /* ============ SOURCE DATA ============ */
+  if(opts.source){
+    doc.addPage('a4','portrait');
+    tocEntries.push({label:"Source data", page:doc.internal.getNumberOfPages()});
+    let y = banner("Source data", "SoABE Program Summary (2026) - the numbers that drive every scenario", SRC);
+    y = statTiles([
+      [PROGRAMS.length,"Programs"], [totalCourses,"Courses"], [fmt(totalSt),"Students"],
+      [fmt1(totalFte),"Staff FTE"], [fmt(totalCr),"Credit points"], [fmt1(schoolSpf),"Students / FTE"]
+    ], y+2) + 20;
+
+    y = tableTitle("Programs", y);
+    const progBody = PROGRAMS.map(p=>{
+      const comp=COMPOSITION[p.id]||[], spf=p.fte>0?p.students/p.fte:0;
+      return [p.name, comp.length, fmt(p.students), fmt1(p.fte), fmt(p.credits||0), fmt1(spf),
+              fmt1(totalSt?p.students/totalSt*100:0)+"%", fmt1(totalFte?p.fte/totalFte*100:0)+"%"];
+    });
+    y = table({
+      startY:y,
+      head:[["Program","Courses","Students","Staff FTE","Credits","Students / FTE","% students","% FTE"]],
+      body:progBody,
+      foot:[["School total", totalCourses, fmt(totalSt), fmt1(totalFte), fmt(totalCr), fmt1(schoolSpf), "100%", "100%"]],
+      headStyles:{fillColor:SRC, textColor:255, fontStyle:'bold', fontSize:8},
+      footStyles:{fillColor:SRCLIGHT, textColor:SRC, fontStyle:'bold'},
+      columnStyles:Object.assign({0:{cellWidth:150}}, rightCols(1,7))
+    }) + 22;
+
+    y = tableTitle("Course composition", y);
+    const compBody=[];
+    PROGRAMS.forEach(p=>{
+      compBody.push([{content:p.name+"   ("+fmt(p.students)+" students)", colSpan:3,
+                      styles:{fillColor:SRCLIGHT, textColor:SRC, fontStyle:'bold'}}]);
+      (COMPOSITION[p.id]||[]).forEach(c=> compBody.push([c[0], c[1], fmt(c[2])]));
+    });
+    table({
+      startY:y,
+      head:[["Code","Course","Students"]],
+      body:compBody,
+      headStyles:{fillColor:SRC, textColor:255, fontStyle:'bold', fontSize:8},
+      columnStyles:{0:{cellWidth:56}, 1:{cellWidth:'auto'}, 2:{halign:'right', cellWidth:56}}
+    });
+  }
+
+  /* ============ PER SCENARIO ============ */
+  scs.forEach(sc=>{
+    const e = Object.assign({}, EXEC_DEF, sc.exec||{});
+    const ds = sc.disciplines || [];
+    const t = scenTotals(sc);
+
+    // per-discipline rows (mirror the Discipline Comparison data view)
+    const rows = ds.map(d=>{
+      const x=discTotals(d);
+      return { name:d.name, programs:x.n, ccs:d.ccs.length, students:x.students, fte:x.fte, credits:x.credits,
+               svc:(+d.hodSvc||0)+d.ccs.reduce((a,c)=>a+(+c.svc||0),0),
+               perFte: x.fte>0 ? x.students/x.fte : 0,
+               pctSt: totalSt ? x.students/totalSt*100 : 0, pctFte: totalFte ? x.fte/totalFte*100 : 0 };
+    });
+    const maxOf={}; METRICS.forEach(m=> maxOf[m.key]=Math.max(...rows.map(r=>r[m.key]), 0.0001));
+    const sum = k => rows.reduce((a,r)=>a+r[k],0);
+
+    /* --- page 1: overview + data table + leadership --- */
+    doc.addPage('a4','portrait');
+    tocEntries.push({label:sc.name, page:doc.internal.getNumberOfPages()});
+    let y = banner(sc.name, "Structure, disciplines and service load");
+    y = statTiles([
+      [t.n,"Disciplines"], [t.grouped+"/"+PROGRAMS.length,"Programs grouped"], [t.n,"Heads of Discipline"],
+      [t.ccs,"Course Coordinators"], [t.roles,"Total roles"], [fmt1(t.svcTot)+"%","Total service"]
+    ], y+2) + 20;
+
+    y = tableTitle("Disciplines at a glance", y);
+    const gSt=sum("students"), gFte=sum("fte"), gCr=sum("credits");
+    const dataBody = rows.map(r=>[r.name, r.programs, r.ccs, fmt(r.students), fmt1(r.fte), fmt(r.credits),
+                                  fmt1(r.perFte), fmt1(r.pctSt)+"%", fmt1(r.pctFte)+"%"]);
+    y = table({
+      startY:y,
+      head:[["Discipline","Programs","Course Coordinators","Students","Staff FTE","Credits","Students / FTE","% students","% FTE"]],
+      body: dataBody.length ? dataBody : [[{content:"No disciplines in this scenario.", colSpan:9, styles:{textColor:MUTED, fontStyle:'italic'}}]],
+      foot: dataBody.length ? [["Grouped total", sum("programs"), sum("ccs"), fmt(gSt), fmt1(gFte), fmt(gCr),
+                                fmt1(gFte>0?gSt/gFte:0), fmt1(totalSt?gSt/totalSt*100:0)+"%", fmt1(totalFte?gFte/totalFte*100:0)+"%"]] : undefined,
+      columnStyles:Object.assign({0:{cellWidth:110}}, rightCols(1,8))
+    }) + 22;
+
+    y = tableTitle("Leadership roles & service load", y);
+    const hodSvc = ds.reduce((a,d)=>a+(+d.hodSvc||0),0);
+    const ccSvcT = ds.reduce((a,d)=>a+d.ccs.reduce((x,c)=>x+(+c.svc||0),0),0);
+    table({
+      startY:y,
+      head:[["Role","Count","Service %"]],
+      body:[
+        ["Head of School", 1, (+e.hosSvc||0)+"%"],
+        ["Associate Head of School - Education & Students", 1, (+e.ahosEduSvc||0)+"%"],
+        ["Associate Head of School - Research", 1, (+e.ahosResSvc||0)+"%"],
+        ["Heads of Discipline", t.n, fmt1(hodSvc)+"%"],
+        ["Course Coordinators", t.ccs, fmt1(ccSvcT)+"%"]
+      ],
+      foot:[["All leadership roles", t.roles, fmt1(t.svcTot)+"%"]],
+      columnStyles:Object.assign({0:{cellWidth:300}}, rightCols(1,2))
+    });
+
+    /* --- page 2: org chart (landscape) --- */
+    doc.addPage('a4','landscape');
+    const cyc = banner(sc.name+" - Organisation chart", "Head of School, Associate Heads, Heads of Discipline and Course Coordinators");
+    const cv = orgChartCanvas(ds, e);
+    const img = cv.toDataURL("image/jpeg", 0.92);
+    const availW = contentW(), availH = H()-cyc-M;
+    const scale = Math.min(availW/cv.width, availH/cv.height);
+    const dw = cv.width*scale, dh = cv.height*scale;
+    doc.addImage(img, "JPEG", M+(availW-dw)/2, cyc+(availH-dh)/2, dw, dh);
+
+    /* --- page 3: discipline charts (landscape) - by metric and by discipline --- */
+    doc.addPage('a4','landscape');
+    banner(sc.name+" - Discipline charts", "Bars are scaled to the largest discipline for each metric");
+    if(!rows.length){
+      setText(MUTED); doc.setFont('helvetica','italic'); doc.setFontSize(11);
+      doc.text("No disciplines in this scenario yet.", M, 120);
+    } else {
+      const areaTop=78, areaBot=H()-26, gapV=20, blockH=(areaBot-areaTop-gapV)/2, pad=4;
+      const chW=contentW()*0.82, chX=M+(contentW()-chW)/2;   // narrower charts -> more horizontal breathing space
+      // block 1: by metric (groups = metrics, one bar per discipline)
+      setText(TEALD); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.text("By metric  -  one column per discipline within each metric", M, areaTop+10);
+      let ly = legendRow(M, areaTop+24, rows.map((r,i)=>({label:r.name, color:DISC_COLORS[i%DISC_COLORS.length]})), W()-M);
+      groupedBars(chX, ly+8, chW, (areaTop+blockH-pad)-(ly+8),
+        METRICS.map(m=>({label:m.label, bars:rows.map((r,i)=>({frac:r[m.key]/maxOf[m.key], color:DISC_COLORS[i%DISC_COLORS.length]}))})));
+      // block 2: by discipline (groups = disciplines, one bar per metric)
+      const top2=areaTop+blockH+gapV;
+      setText(TEALD); doc.setFont('helvetica','bold'); doc.setFontSize(10);
+      doc.text("By discipline  -  one column per metric within each discipline", M, top2+10);
+      let ly2 = legendRow(M, top2+24, METRICS.map(m=>({label:m.label, color:m.color})), W()-M);
+      groupedBars(chX, ly2+8, chW, (top2+blockH-pad)-(ly2+8),
+        rows.map(r=>({label:r.name, bars:METRICS.map(m=>({frac:r[m.key]/maxOf[m.key], color:m.color}))})));
+    }
+  });
+
+  /* ============ COMPARATIVE ANALYSIS (table only) ============ */
+  if(opts.compare && scs.length){
+    const CT = scs.map(scenTotals);
+    doc.addPage('a4','landscape');
+    tocEntries.push({label:"Comparative analysis", page:doc.internal.getNumberOfPages()});
+    let y = banner("Comparative analysis", "The selected scenarios side by side");
+    const cRow=(label,fn)=>[label, ...CT.map(fn)];
+    const sec=label=>[{content:label, colSpan:scs.length+1, styles:{fillColor:LIGHT, textColor:TEALD, fontStyle:'bold', halign:'left'}}];
+    const rat=(t,r,mx)=> t.n && t[r] ? fmtRatio(t[r])+" : 1" : (t.n && t[mx]>0 ? t[mx]+" : 0" : "-");
+    const rng=(t,mn,mx,f)=> t.n ? f(t[mn])+" - "+f(t[mx]) : "-";
+    const body=[
+      sec("Structure"),
+      cRow("Disciplines", t=>t.n),
+      cRow("Programs grouped (of "+PROGRAMS.length+")", t=>t.grouped),
+      cRow("Most programs in one discipline", t=>t.maxProg),
+      sec("Discipline size  (smallest - largest)"),
+      cRow("Staff FTE", t=>rng(t,"minFte","maxFte",v=>fmt1(v))),
+      cRow("Students", t=>rng(t,"minSt","maxSt",v=>fmt(v))),
+      cRow("Programs per discipline", t=>rng(t,"minProg","maxProg",v=>v)),
+      cRow("Course Coordinators per discipline", t=>rng(t,"minCC","maxCC",v=>v)),
+      cRow("Credits per discipline", t=>rng(t,"minCr","maxCr",v=>fmt(v))),
+      sec("Discipline balance  (largest ÷ smallest - lower = more balanced)"),
+      cRow("Course Coordinators", t=>rat(t,"rCc","maxCC")),
+      cRow("Programs", t=>rat(t,"rProg","maxProg")),
+      cRow("Staff FTE", t=>rat(t,"rFte","maxFte")),
+      cRow("Students", t=>rat(t,"rSt","maxSt")),
+      cRow("Credits", t=>rat(t,"rCr","maxCr")),
+      cRow("Overall balance score", t=> t.n && t.balance ? fmtRatio(t.balance) : "-"),
+      sec("Roles & service cost"),
+      cRow("Heads of Discipline", t=>t.n),
+      cRow("Course Coordinators", t=>t.ccs),
+      cRow("Total leadership roles (incl. HoS + 2 AHoS)", t=>t.roles),
+      cRow("Total service allocation", t=>fmt1(t.svcTot)+"%")
+    ];
+    table({
+      startY:y,
+      head:[["Metric", ...scs.map(s=>s.name)]],
+      body,
+      columnStyles:Object.assign({0:{cellWidth:230, fontStyle:'bold'}}, rightCols(1, scs.length))
+    });
+  }
+
+  /* ============ TASK ALLOCATION ============ */
+  if(opts.tasks){
+    doc.addPage('a4','portrait');
+    tocEntries.push({label:"Task allocation", page:doc.internal.getNumberOfPages()});
+    let y = banner("Task allocation", "Former Course Director tasks by the role that will own them");
+    const cnt = a => S.tasks.filter(t=>t.assign===a).length;
+    y = statTiles([
+      [cnt("cc"),"Course Coordinator"], [cnt("hod"),"Head of Discipline"],
+      [cnt("ahos"),"AHoS - Educ. & Students"], [cnt("none"),"Unassigned"]
+    ], y+2) + 18;
+    const order = {"Course Leadership":1,"Student Management":2,"Industry Engagement":3,"Marketing & Recruitment":4,"Governance & Administration":5};
+    const byCat = list => list.slice().sort((a,b)=>(order[a.cat]||9)-(order[b.cat]||9));
+    const roleTables = [
+      {key:"cc",   title:"Course Coordinator"},
+      {key:"hod",  title:"Head of Discipline"},
+      {key:"ahos", title:"Associate Head of School - Education & Students"}
+    ];
+    const ensureSpace = (yy, need) => { if(yy+need > H()-40){ doc.addPage('a4','portrait'); return banner("Task allocation (continued)", ""); } return yy; };
+    roleTables.forEach(rt=>{
+      const list = byCat(S.tasks.filter(t=>t.assign===rt.key));
+      y = ensureSpace(y, 74);
+      y = tableTitle(`${rt.title}  (${list.length} task${list.length===1?"":"s"})`, y);
+      y = table({
+        startY:y,
+        head:[["Category","Task"]],
+        body: list.length ? list.map(t=>[t.cat, t.text])
+                          : [[{content:"No tasks allocated to this role yet.", colSpan:2, styles:{textColor:MUTED, fontStyle:'italic'}}]],
+        columnStyles:{0:{cellWidth:120}, 1:{cellWidth:'auto'}}
+      }) + 20;
+    });
+  }
+
+  /* ============ FILL "WHAT'S INSIDE" ON THE COVER (clickable, with page numbers) ============ */
+  doc.setPage(1);
+  let ty = tocStartY;
+  tocEntries.forEach(en=>{
+    setText(TEAL); doc.setFont('helvetica','normal'); doc.setFontSize(10.5);
+    doc.text(en.label, M+4, ty);
+    setText(MUTED); doc.setFontSize(10);
+    doc.text(String(en.page), W()-M, ty, {align:'right'});
+    // clickable box across the whole row -> jumps to that page
+    doc.link(M, ty-11, contentW(), 16, {pageNumber:en.page});
+    ty += 20;
+  });
+
+  /* ============ FOOTERS ============ */
+  const pages = doc.internal.getNumberOfPages();
+  for(let i=1;i<=pages;i++){
+    doc.setPage(i);
+    setText(MUTED); doc.setFont('helvetica','normal'); doc.setFontSize(8);
+    doc.text("SoABE Organisation Design Report  ·  "+dnice, M, H()-16);
+    doc.text(i+" / "+pages, W()-M, H()-16, {align:'right'});
+  }
+
+  doc.save("soabe-org-design-report-"+dstamp.toISOString().slice(0,10)+".pdf");
+}
+
+/* ---------------- report modal wiring ---------------- */
+const repSel = () => $$(".rep-scen:checked").map(c=>c.value);
+function updateRepNote(){
+  const n = repSel().length;
+  $("#rep-note").textContent = n ? `${n} scenario${n===1?"":"s"} selected` : "Select at least one scenario";
+  $("#report-go").disabled = n===0;
+}
+function openReportModal(){
+  syncActive();
+  $("#rep-scen-list").innerHTML = S.scenarios.map(sc=>{
+    const t=scenTotals(sc);
+    return `<label class="m-check"><input type="checkbox" class="rep-scen" value="${sc.id}" checked>
+      <span>${esc(sc.name)}</span><span class="m-meta">${t.n} disc · ${t.ccs} CC</span></label>`;
+  }).join("");
+  updateRepNote();
+  $("#report-modal").classList.add("open");
+}
+function closeReportModal(){ $("#report-modal").classList.remove("open"); }
+$("#btn-report").addEventListener("click", openReportModal);
+$("#report-cancel").addEventListener("click", closeReportModal);
+$("#report-cancel-x").addEventListener("click", closeReportModal);
+$("#report-modal").addEventListener("click", e=>{ if(e.target===$("#report-modal")) closeReportModal(); });
+$("#rep-scen-list").addEventListener("change", updateRepNote);
+$("#rep-all").addEventListener("click", ()=>{ $$(".rep-scen").forEach(c=>c.checked=true); updateRepNote(); });
+$("#rep-none").addEventListener("click", ()=>{ $$(".rep-scen").forEach(c=>c.checked=false); updateRepNote(); });
+$("#report-go").addEventListener("click", async ()=>{
+  const ids = repSel(); if(!ids.length) return;
+  const opts = { source:$("#rep-source").checked, compare:$("#rep-compare").checked, tasks:$("#rep-tasks").checked };
+  const go=$("#report-go"), rbtn=$("#btn-report"), was=go.textContent;
+  go.disabled=true; go.textContent="Generating…"; rbtn.disabled=true;
+  try{
+    await generateReport(ids, opts);
+    closeReportModal();
+  }catch(err){
+    console.error(err);
+    alert("Couldn't build the PDF. The report loads a small library the first time, so an internet connection is needed on first use. Please check your connection and try again.\n\n("+(err&&err.message?err.message:err)+")");
+  }finally{
+    go.disabled=false; go.textContent=was; rbtn.disabled=false; updateRepNote();
+  }
+});
+
+/* ================================================================
+   SHARED LIBRARY (Vercel Blob via /api/scenarios)
+   - dropdown lists everyone's saved scenario sets (load = view & edit)
+   - "Save to library" stores the current set as a NEW named entry
+     (never overwrites an existing one)
+================================================================ */
+// Same-origin when hosted on Vercel. If you ever open the raw .html file
+// locally, set this to your deployed URL, e.g. "https://your-app.vercel.app".
+const LIB_API = "";
+
+// Load a full dashboard state (used by both file Import and the shared library)
+function applyImported(d){
+  if(!d || !d.disciplines || !d.tasks || !d.exec) throw new Error("bad state");
+  d.tasks.forEach(t=>{ if(!["none","hod","cc","ahos"].includes(t.assign)) t.assign="none"; });
+  if(!Array.isArray(d.scenarios) || !d.scenarios.length){
+    d.scenarios = [{id:"scImp", name:"Imported", disciplines:deep(d.disciplines), exec:deep(d.exec)}];
+    d.activeId = "scImp";
+  }
+  S = d; renderAll();
+}
+
+async function libList(){
+  const r = await fetch(LIB_API + "/api/scenarios", {cache:"no-store"});
+  if(!r.ok) throw new Error("list failed (" + r.status + ")");
+  return await r.json();               // [{name, url, uploadedAt}]
+}
+async function libRefresh(){
+  const sel = $("#lib-select");
+  try{
+    const items = await libList();
+    const opts = ['<option value="">Shared library…</option>'].concat(
+      items.map(it=>`<option value="${esc(it.url)}">${esc(it.name)}${it.uploadedAt?` — ${new Date(it.uploadedAt).toLocaleDateString('en-AU')}`:""}</option>`)
+    );
+    sel.innerHTML = opts.join("");
+  }catch(e){
+    sel.innerHTML = '<option value="">Shared library unavailable</option>';
+  }
+}
+$("#lib-select").addEventListener("change", async e=>{
+  const url = e.target.value; if(!url) return;
+  try{
+    const r = await fetch(url, {cache:"no-store"});
+    if(!r.ok) throw new Error("fetch failed");
+    const doc = await r.json();
+    applyImported(doc.state || doc);   // stored as {name, savedAt, state}
+  }catch(err){
+    alert("Couldn't load that scenario set from the library.");
+  }
+  e.target.value = "";
+});
+$("#lib-save").addEventListener("click", async ()=>{
+  syncActive();
+  const name = (prompt("Name this scenario set for the shared library:", "") || "").trim();
+  if(!name) return;
+  const btn = $("#lib-save"), was = btn.textContent;
+  btn.disabled = true; btn.textContent = "Saving…";
+  try{
+    const r = await fetch(LIB_API + "/api/scenarios", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({name, state:S})
+    });
+    if(!r.ok) throw new Error("save failed (" + r.status + ")");
+    await libRefresh();
+    alert('Saved to the shared library as "' + name + '".');
+  }catch(err){
+    alert("Couldn't save to the shared library.\nIf you're opening the file directly, use the hosted (Vercel) version instead.\n\n(" + (err && err.message || err) + ")");
+  }finally{
+    btn.disabled = false; btn.textContent = was;
+  }
+});
+
+/* ---------------- boot ---------------- */
+load();
+renderAll();
+renderData();
+zoomLabel();
+libRefresh();
+</script>
+
+</body>
+</html>
