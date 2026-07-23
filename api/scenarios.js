@@ -1,14 +1,28 @@
 // Vercel serverless function: shared scenario library backed by Vercel Blob.
-// GET  /api/scenarios        -> list saved scenario sets [{name, url, uploadedAt}]
-// POST /api/scenarios        -> save the posted {name, state} as a NEW entry
+// Works with PRIVATE Blob stores - reads are proxied through this function so
+// the browser never needs a public blob URL.
 //
-// Storage: Vercel Blob. Connect a Blob store to this project in the Vercel
-// dashboard (Storage tab) - that injects BLOB_READ_WRITE_TOKEN automatically,
-// which @vercel/blob picks up. No token goes in this file.
-
+//   GET  /api/scenarios            -> list saved sets [{name, id, uploadedAt}]
+//   GET  /api/scenarios?id=<path>  -> return one saved set {name, savedAt, state}
+//   POST /api/scenarios            -> save posted {name, state} as a NEW entry
+//
+// Requires a Blob store connected to this project and BLOB_READ_WRITE_TOKEN
+// present in the project's Environment Variables (all environments).
+ 
 const { put, list } = require("@vercel/blob");
-
-async function readJson(req){
+ 
+const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+const PREFIX = "scenarios/";
+ 
+function nameFromPath(pathname) {
+  const base = pathname.replace(/^scenarios\//, "").replace(/\.json$/, "");
+  const sep = base.indexOf("__");
+  if (sep < 0) return base;
+  try { return decodeURIComponent(base.slice(sep + 2)); }
+  catch { return base.slice(sep + 2); }
+}
+ 
+async function readJson(req) {
   if (req.body && typeof req.body === "object") return req.body;
   if (typeof req.body === "string") { try { return JSON.parse(req.body); } catch { return null; } }
   return await new Promise(resolve => {
@@ -18,42 +32,76 @@ async function readJson(req){
     req.on("error", () => resolve(null));
   });
 }
-
+ 
+// Download a blob's JSON content server-side. Tries the download URL and the
+// canonical URL, each with and without the auth token, so it works whether the
+// store is private (needs auth) or public (doesn't).
+async function downloadJson(b) {
+  const attempts = [
+    [b.downloadUrl, true], [b.downloadUrl, false],
+    [b.url, true],         [b.url, false],
+  ].filter(a => a[0]);
+  let lastErr;
+  for (const [url, auth] of attempts) {
+    try {
+      const r = await fetch(url, auth ? { headers: { authorization: `Bearer ${TOKEN}` } } : undefined);
+      if (r.ok) return await r.json();
+      lastErr = new Error("download status " + r.status);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("download failed");
+}
+ 
+// Save preferring private access (matches private stores); fall back to public.
+async function saveBlob(pathname, payload) {
+  const base = { contentType: "application/json", addRandomSuffix: false, token: TOKEN };
+  try { return await put(pathname, payload, { ...base, access: "private" }); }
+  catch (e) { return await put(pathname, payload, { ...base, access: "public" }); }
+}
+ 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
-
+ 
   try {
     if (req.method === "GET") {
-      const { blobs } = await list({ prefix: "scenarios/" });
-      const items = blobs.map(b => {
-        const base = b.pathname.replace(/^scenarios\//, "").replace(/\.json$/, "");
-        const sep = base.indexOf("__");
-        let name = base;
-        if (sep >= 0) { try { name = decodeURIComponent(base.slice(sep + 2)); } catch { name = base.slice(sep + 2); } }
-        return { name, url: b.url, pathname: b.pathname, uploadedAt: b.uploadedAt };
-      }).sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+      let id = null;
+      try { id = new URL(req.url, "http://localhost").searchParams.get("id"); } catch {}
+ 
+      const { blobs } = await list({ prefix: PREFIX, token: TOKEN });
+ 
+      if (id) {
+        const b = blobs.find(x => x.pathname === id);
+        if (!b) { res.status(404).json({ error: "not found" }); return; }
+        const doc = await downloadJson(b);
+        res.status(200).json(doc);
+        return;
+      }
+ 
+      const items = blobs.map(b => ({
+        name: nameFromPath(b.pathname),
+        id: b.pathname,
+        uploadedAt: b.uploadedAt,
+      })).sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
       res.status(200).json(items);
       return;
     }
-
+ 
     if (req.method === "POST") {
       const body = await readJson(req);
       const name = (body && body.name ? String(body.name) : "Untitled").slice(0, 120);
       const state = body && body.state;
       if (!state) { res.status(400).json({ error: "missing 'state'" }); return; }
       const ts = Date.now();
-      const pathname = `scenarios/${ts}__${encodeURIComponent(name)}.json`;
+      const pathname = `${PREFIX}${ts}__${encodeURIComponent(name)}.json`;
       const payload = JSON.stringify({ name, savedAt: new Date(ts).toISOString(), state });
-      const blob = await put(pathname, payload, {
-        access: "public", contentType: "application/json", addRandomSuffix: false
-      });
-      res.status(200).json({ ok: true, name, url: blob.url, uploadedAt: new Date(ts).toISOString() });
+      await saveBlob(pathname, payload);
+      res.status(200).json({ ok: true, name, id: pathname, uploadedAt: new Date(ts).toISOString() });
       return;
     }
-
+ 
     res.status(405).json({ error: "method not allowed" });
   } catch (err) {
     res.status(500).json({ error: String((err && err.message) || err) });
