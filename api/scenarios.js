@@ -6,7 +6,8 @@
 //   GET  /api/scenarios?id=<path>  -> return one saved set {name, savedAt, state}
 //   POST /api/scenarios            -> save posted {name, state} as a NEW entry
 //                                     (409 if the name is already in use)
-//   DELETE /api/scenarios?id=<path> -> delete a saved set
+//   DELETE /api/scenarios?id=<path> -> soft-delete a saved set (archives a copy
+//                                     to archive/ first, then removes it)
 //
 // Requires a Blob store connected to this project and BLOB_READ_WRITE_TOKEN
 // present in the project's Environment Variables (all environments).
@@ -15,6 +16,7 @@ const { put, list, del } = require("@vercel/blob");
 
 const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
 const PREFIX = "scenarios/";
+const ARCHIVE = "archive/";     // soft-deleted copies live here (owner-only, never listed)
 
 function nameFromPath(pathname) {
   const base = pathname.replace(/^scenarios\//, "").replace(/\.json$/, "");
@@ -129,8 +131,22 @@ module.exports = async (req, res) => {
       const { blobs } = await list({ prefix: PREFIX, token: TOKEN });
       const b = blobs.find(x => x.pathname === id);
       if (!b) { res.status(404).json({ error: "not found" }); return; }
+
+      // Soft delete: archive a copy FIRST, then remove from the visible library.
+      // If archiving fails we abort (throws) so no data is lost. The archive/
+      // area is never listed by this API - only reachable via your Vercel account.
+      const doc = await downloadJson(b);
+      const delTs = Date.now();
+      const arcName = `${ARCHIVE}${delTs}__${encodeURIComponent(nameFromPath(b.pathname))}.json`;
+      const arcPayload = JSON.stringify({
+        ...doc,
+        deletedAt: new Date(delTs).toISOString(),
+        originalPathname: b.pathname,
+      });
+      await saveBlob(arcName, arcPayload);   // throws if it can't archive -> delete aborted
+
       await del(b.url, { token: TOKEN });
-      res.status(200).json({ ok: true });
+      res.status(200).json({ ok: true, archived: arcName });
       return;
     }
 
