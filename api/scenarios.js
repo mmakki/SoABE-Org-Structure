@@ -1,12 +1,17 @@
 // Vercel serverless function: shared scenario library backed by Vercel Blob.
 // Works with PRIVATE Blob stores - reads are proxied through this function so
-// the browser never needs a public blob URL. Logs the real error to Vercel Logs.
+// the browser never needs a public blob URL.
 //
 //   GET  /api/scenarios            -> list saved sets [{name, id, uploadedAt}]
 //   GET  /api/scenarios?id=<path>  -> return one saved set {name, savedAt, state}
 //   POST /api/scenarios            -> save posted {name, state} as a NEW entry
+//                                     (409 if the name is already in use)
+//   DELETE /api/scenarios?id=<path> -> delete a saved set
+//
+// Requires a Blob store connected to this project and BLOB_READ_WRITE_TOKEN
+// present in the project's Environment Variables (all environments).
 
-const { put, list } = require("@vercel/blob");
+const { put, list, del } = require("@vercel/blob");
 
 const TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
 const PREFIX = "scenarios/";
@@ -30,6 +35,9 @@ async function readJson(req) {
   });
 }
 
+// Download a blob's JSON content server-side. Tries the download URL and the
+// canonical URL, each with and without the auth token, so it works whether the
+// store is private (needs auth) or public (doesn't).
 async function downloadJson(b) {
   const attempts = [
     [b.downloadUrl, true], [b.downloadUrl, false],
@@ -46,6 +54,7 @@ async function downloadJson(b) {
   throw lastErr || new Error("download failed");
 }
 
+// Save preferring private access (matches private stores); fall back to public.
 async function saveBlob(pathname, payload) {
   const base = { contentType: "application/json", addRandomSuffix: false, token: TOKEN };
   try {
@@ -64,7 +73,7 @@ async function saveBlob(pathname, payload) {
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
 
@@ -97,11 +106,31 @@ module.exports = async (req, res) => {
       const name = (body && body.name ? String(body.name) : "Untitled").slice(0, 120);
       const state = body && body.state;
       if (!state) { res.status(400).json({ error: "missing 'state'" }); return; }
+
+      // Reject a name that's already in use (case-insensitive).
+      const existing = await list({ prefix: PREFIX, token: TOKEN });
+      const taken = existing.blobs.some(
+        b => nameFromPath(b.pathname).toLowerCase() === name.toLowerCase()
+      );
+      if (taken) { res.status(409).json({ error: "name in use" }); return; }
+
       const ts = Date.now();
       const pathname = `${PREFIX}${ts}__${encodeURIComponent(name)}.json`;
       const payload = JSON.stringify({ name, savedAt: new Date(ts).toISOString(), state });
       await saveBlob(pathname, payload);
       res.status(200).json({ ok: true, name, id: pathname, uploadedAt: new Date(ts).toISOString() });
+      return;
+    }
+
+    if (req.method === "DELETE") {
+      let id = null;
+      try { id = new URL(req.url, "http://localhost").searchParams.get("id"); } catch {}
+      if (!id) { res.status(400).json({ error: "missing id" }); return; }
+      const { blobs } = await list({ prefix: PREFIX, token: TOKEN });
+      const b = blobs.find(x => x.pathname === id);
+      if (!b) { res.status(404).json({ error: "not found" }); return; }
+      await del(b.url, { token: TOKEN });
+      res.status(200).json({ ok: true });
       return;
     }
 
