@@ -2417,14 +2417,14 @@ function applyImported(d){
 async function libList(){
   const r = await fetch(LIB_API + "/api/scenarios", {cache:"no-store"});
   if(!r.ok) throw new Error("list failed (" + r.status + ")");
-  return await r.json();               // [{name, url, uploadedAt}]
+  return await r.json();               // [{name, id, uploadedAt}]
 }
 async function libRefresh(){
   const sel = $("#lib-select");
   try{
     const items = await libList();
     const opts = ['<option value="">Shared library…</option>'].concat(
-      items.map(it=>`<option value="${esc(it.url)}">${esc(it.name)}${it.uploadedAt?` — ${new Date(it.uploadedAt).toLocaleDateString('en-AU')}`:""}</option>`)
+      items.map(it=>`<option value="${esc(it.id)}">${esc(it.name)}${it.uploadedAt?` - ${new Date(it.uploadedAt).toLocaleDateString('en-AU')}`:""}</option>`)
     );
     sel.innerHTML = opts.join("");
   }catch(e){
@@ -2432,9 +2432,9 @@ async function libRefresh(){
   }
 }
 $("#lib-select").addEventListener("change", async e=>{
-  const url = e.target.value; if(!url) return;
+  const id = e.target.value; if(!id) return;
   try{
-    const r = await fetch(url, {cache:"no-store"});
+    const r = await fetch(LIB_API + "/api/scenarios?id=" + encodeURIComponent(id), {cache:"no-store"});
     if(!r.ok) throw new Error("fetch failed");
     const doc = await r.json();
     applyImported(doc.state || doc);   // stored as {name, savedAt, state}
