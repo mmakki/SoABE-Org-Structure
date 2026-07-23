@@ -1644,7 +1644,10 @@ $("#import-file").addEventListener("change", e=>{
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
   r.onload = ()=>{
-    try{ applyImported(JSON.parse(r.result)); }
+    try{
+      const d = JSON.parse(r.result);
+      applyImported(d && d.state ? d.state : d);   // accept plain exports and library/archive files
+    }
     catch(err){ alert("That file doesn't look like a dashboard export."); }
   };
   r.readAsText(f);
