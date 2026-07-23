@@ -446,6 +446,12 @@
     background:#fff; color:var(--ink); border:1px solid var(--line); padding:9px 16px; border-radius:8px; font-size:13px;
   }
   .btn-ghost:hover{background:var(--teal-light);}
+  .m-input{
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px;
+    font-size:13px; color:var(--ink); background:#fff; font-family:inherit; box-sizing:border-box;
+  }
+  .m-input:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 2px var(--teal-light);}
+  .m-opt{font-weight:400; text-transform:none; letter-spacing:0; color:var(--muted);}
 </style>
 </head>
 <body>
@@ -478,7 +484,7 @@
     <button id="btn-report" title="Create a printable PDF report: source data, a page or two per scenario, and a side-by-side comparison">Export Report</button>
     <button id="btn-excel" title="Download disciplines, leadership roles, service load and task distribution as an Excel workbook">Export Excel</button>
     <button id="btn-export" title="Save a snapshot file you can share or re-load later">Export JSON</button>
-    <button id="btn-import" title="Load a snapshot file">Import</button>
+    <button id="btn-import" title="Load a snapshot (JSON) file">Import JSON</button>
     <button id="btn-reset">Reset</button>
     <input type="file" id="import-file" accept=".json,application/json" style="display:none">
   </div>
@@ -625,6 +631,28 @@
       <span class="m-note" id="rep-note"></span>
       <button class="btn-ghost" id="report-cancel">Cancel</button>
       <button class="btn-primary" id="report-go">Generate PDF</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="lib-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="lib-modal-title">
+    <div class="modal-head">
+      <h2 id="lib-modal-title">Save to shared library</h2>
+      <button class="m-x" id="lib-cancel-x" title="Close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="m-lead">Saves the current set of scenarios as a new named entry anyone with the link can load.</p>
+      <div class="m-group-label">Name</div>
+      <input type="text" id="lib-name" class="m-input" placeholder="e.g. Final structure" autocomplete="off" maxlength="80">
+      <div class="m-group-label">Scenario name <span class="m-opt">(optional)</span></div>
+      <input type="text" id="lib-scen" class="m-input" placeholder="e.g. 9-discipline model" autocomplete="off" maxlength="80">
+      <p class="m-lead" style="margin:12px 0 0;">Saved as: <b id="lib-preview"></b></p>
+    </div>
+    <div class="modal-foot">
+      <span class="m-note" id="lib-note"></span>
+      <button class="btn-ghost" id="lib-cancel">Cancel</button>
+      <button class="btn-primary" id="lib-go">Save</button>
     </div>
   </div>
 </div>
@@ -2424,7 +2452,7 @@ async function libRefresh(){
   try{
     const items = await libList();
     const opts = ['<option value="">Shared library…</option>'].concat(
-      items.map(it=>`<option value="${esc(it.id)}">${esc(it.name)}${it.uploadedAt?` - ${new Date(it.uploadedAt).toLocaleDateString('en-AU')}`:""}</option>`)
+      items.map(it=>`<option value="${esc(it.id)}">${esc(it.name)}</option>`)
     );
     sel.innerHTML = opts.join("");
   }catch(e){
@@ -2443,12 +2471,51 @@ $("#lib-select").addEventListener("change", async e=>{
   }
   e.target.value = "";
 });
-$("#lib-save").addEventListener("click", async ()=>{
+// Compose the library entry name as "Name - Scenario name - Date"
+// (scenario name is optional; date is today).
+function libDateStr(){
+  const d = new Date();
+  const mons = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return d.getDate() + " " + mons[d.getMonth()] + " " + d.getFullYear();
+}
+function libFullName(){
+  const nm = $("#lib-name").value.trim();
+  const sc = $("#lib-scen").value.trim();
+  const parts = [];
+  if(nm) parts.push(nm);
+  if(sc) parts.push(sc);
+  parts.push(libDateStr());
+  return parts.join(" - ");
+}
+function libPreview(){
+  $("#lib-preview").textContent = libFullName();
+  $("#lib-go").disabled = !$("#lib-name").value.trim();
+}
+function openLibModal(){
   syncActive();
-  const name = (prompt("Name this scenario set for the shared library:", "") || "").trim();
-  if(!name) return;
-  const btn = $("#lib-save"), was = btn.textContent;
-  btn.disabled = true; btn.textContent = "Saving…";
+  $("#lib-name").value = "";
+  $("#lib-scen").value = "";
+  libPreview();
+  $("#lib-modal").classList.add("open");
+  setTimeout(()=>$("#lib-name").focus(), 30);
+}
+function closeLibModal(){ $("#lib-modal").classList.remove("open"); }
+
+$("#lib-save").addEventListener("click", openLibModal);
+$("#lib-cancel").addEventListener("click", closeLibModal);
+$("#lib-cancel-x").addEventListener("click", closeLibModal);
+$("#lib-modal").addEventListener("click", e=>{ if(e.target===$("#lib-modal")) closeLibModal(); });
+$("#lib-name").addEventListener("input", libPreview);
+$("#lib-scen").addEventListener("input", libPreview);
+[$("#lib-name"), $("#lib-scen")].forEach(inp=>inp.addEventListener("keydown", e=>{
+  if(e.key==="Enter" && $("#lib-name").value.trim()){ e.preventDefault(); $("#lib-go").click(); }
+}));
+
+$("#lib-go").addEventListener("click", async ()=>{
+  if(!$("#lib-name").value.trim()) return;
+  const name = libFullName();
+  const go = $("#lib-go"), was = go.textContent;
+  go.disabled = true; go.textContent = "Saving…";
   try{
     const r = await fetch(LIB_API + "/api/scenarios", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -2456,11 +2523,12 @@ $("#lib-save").addEventListener("click", async ()=>{
     });
     if(!r.ok) throw new Error("save failed (" + r.status + ")");
     await libRefresh();
+    closeLibModal();
     alert('Saved to the shared library as "' + name + '".');
   }catch(err){
     alert("Couldn't save to the shared library.\nIf you're opening the file directly, use the hosted (Vercel) version instead.\n\n(" + (err && err.message || err) + ")");
   }finally{
-    btn.disabled = false; btn.textContent = was;
+    go.disabled = false; go.textContent = was;
   }
 });
 
