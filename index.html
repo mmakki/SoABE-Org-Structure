@@ -384,14 +384,21 @@
     body{background:#fff;}
   }
 
-  /* ---------- Export Report button + picker modal ---------- */
-  .file-actions #btn-report{
-    background:#fff; color:var(--teal-dark); border-color:#fff; font-weight:700;
+  /* ---------- top-right menus + modals ---------- */
+  .menu{position:relative;}
+  .menu-caret{font-size:10px; opacity:.85; margin-left:3px;}
+  .menu-panel{
+    position:absolute; top:calc(100% + 4px); right:0; z-index:120; min-width:200px;
+    background:#fff; border:1px solid var(--line); border-radius:9px;
+    box-shadow:0 12px 32px rgba(15,32,44,.28); padding:6px; display:flex; flex-direction:column; gap:2px;
   }
-  .file-actions #btn-report:hover{background:#eef6fa; color:var(--teal-dark);}
-  .file-actions #btn-report[disabled]{opacity:.6; cursor:progress;}
-  .file-actions #lib-save, .file-actions #lib-manage{background:transparent; color:#cfe2ec; border:1px solid rgba(255,255,255,.3);}
-  .file-actions #lib-save[disabled]{opacity:.6; cursor:progress;}
+  .menu-panel[hidden]{display:none;}
+  .menu-panel .menu-item{
+    text-align:left; background:transparent; color:var(--ink); border:none; width:100%;
+    padding:8px 12px; border-radius:7px; font-size:13px; cursor:pointer; white-space:nowrap;
+  }
+  .menu-panel .menu-item:hover{background:var(--teal-light); color:var(--ink);}
+  .menu-panel .menu-item[disabled]{opacity:.6; cursor:progress;}
   .modal-overlay{
     position:fixed; inset:0; background:rgba(15,32,44,.55); z-index:100;
     display:none; align-items:center; justify-content:center; padding:20px;
@@ -460,20 +467,7 @@
   .libman-del:hover{background:#fbeceb;}
   .libman-del[disabled]{opacity:.6; cursor:progress;}
   .libman-date{color:var(--muted); font-size:11px; margin-left:8px; white-space:nowrap;}
-  /* searchable library picker */
-  .lib-picker{position:relative;}
-  .lib-pick-btn{
-    display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.06); color:#eaf3f7;
-    border:1px solid rgba(255,255,255,.3); padding:6px 8px; border-radius:7px; font-size:12px;
-    max-width:210px; cursor:pointer;
-  }
-  .lib-pick-btn:hover{background:rgba(255,255,255,.12);}
-  #lib-pick-label{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .lib-pick-caret{margin-left:auto; opacity:.8; font-size:10px;}
-  .lib-pick-panel{
-    position:absolute; top:calc(100% + 4px); left:0; z-index:120; width:290px; max-width:80vw;
-    background:#fff; border:1px solid var(--line); border-radius:9px; box-shadow:0 12px 32px rgba(15,32,44,.28); padding:8px;
-  }
+  /* library load list + search (inside the Load modal) */
   .lib-search{
     width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:7px; font-size:13px;
     box-sizing:border-box; margin-bottom:6px; color:var(--ink); font-family:inherit;
@@ -515,21 +509,23 @@
     <button class="tab-btn" data-tab="tasks">Task Allocation</button>
   </nav>
   <div class="file-actions">
-    <div class="lib-picker" id="lib-picker">
-      <button type="button" id="lib-pick-btn" class="lib-pick-btn" title="Load a saved scenario set from the shared library">
-        <span id="lib-pick-label">Shared library…</span><span class="lib-pick-caret">&#9662;</span>
-      </button>
-      <div class="lib-pick-panel" id="lib-pick-panel" hidden>
-        <input type="text" id="lib-search" class="lib-search" placeholder="Search saved sets…" autocomplete="off">
-        <div class="lib-pick-list" id="lib-pick-list"></div>
+    <div class="menu" id="menu-library">
+      <button type="button" class="menu-btn" id="menu-library-btn" title="Load, save or manage the shared library">Library <span class="menu-caret">&#9662;</span></button>
+      <div class="menu-panel" id="menu-library-panel" hidden>
+        <button type="button" class="menu-item" id="lib-load" title="Load a saved scenario set from the shared library">Load from library…</button>
+        <button type="button" class="menu-item" id="lib-save" title="Save the current scenario set to the shared library as a new named entry">Save to library</button>
+        <button type="button" class="menu-item" id="lib-manage" title="Delete saved sets from the shared library">Manage library</button>
       </div>
     </div>
-    <button id="lib-save" title="Save the current scenario set to the shared library as a new named entry">Save to library</button>
-    <button id="lib-manage" title="Delete saved sets from the shared library">Manage library</button>
-    <button id="btn-report" title="Create a printable PDF report: source data, a page or two per scenario, and a side-by-side comparison">Export Report</button>
-    <button id="btn-excel" title="Download disciplines, leadership roles, service load and task distribution as an Excel workbook">Export Excel</button>
-    <button id="btn-export" title="Save a snapshot file you can share or re-load later">Export JSON</button>
-    <button id="btn-import" title="Load a snapshot (JSON) file">Import JSON</button>
+    <div class="menu" id="menu-io">
+      <button type="button" class="menu-btn" id="menu-io-btn" title="Import or export the dashboard">Import / Export <span class="menu-caret">&#9662;</span></button>
+      <div class="menu-panel" id="menu-io-panel" hidden>
+        <button type="button" class="menu-item" id="btn-report" title="Create a printable PDF report: source data, a page or two per scenario, and a side-by-side comparison">Export Report (PDF)</button>
+        <button type="button" class="menu-item" id="btn-excel" title="Download disciplines, leadership roles, service load and task distribution as an Excel workbook">Export Excel</button>
+        <button type="button" class="menu-item" id="btn-export" title="Save a snapshot file you can share or re-load later">Export JSON</button>
+        <button type="button" class="menu-item" id="btn-import" title="Load a snapshot (JSON) file">Import JSON</button>
+      </div>
+    </div>
     <button id="btn-reset">Reset</button>
     <input type="file" id="import-file" accept=".json,application/json" style="display:none">
   </div>
@@ -715,6 +711,22 @@
     </div>
     <div class="modal-foot">
       <button class="btn-ghost" id="libman-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="libload-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="libload-title">
+    <div class="modal-head">
+      <h2 id="libload-title">Load from library</h2>
+      <button class="m-x" id="libload-x" title="Close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="lib-search" class="m-input" placeholder="Search saved sets…" autocomplete="off">
+      <div class="lib-pick-list" id="lib-pick-list" style="margin-top:8px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost" id="libload-close">Close</button>
     </div>
   </div>
 </div>
@@ -2533,45 +2545,54 @@ function renderPickList(q){
   ).join("");
 }
 async function libRefresh(){
-  const lbl = $("#lib-pick-label");
   try{
     LIB_ITEMS = await libList();
-    lbl.textContent = lbl.dataset.loaded || "Shared library…";
     renderPickList($("#lib-search").value);
   }catch(e){
     LIB_ITEMS = [];
     $("#lib-pick-list").innerHTML = '<div class="lib-pick-empty">Shared library unavailable.</div>';
   }
 }
-function openPickPanel(){
-  $("#lib-search").value = "";
-  renderPickList("");
-  $("#lib-pick-panel").hidden = false;
-  setTimeout(()=>$("#lib-search").focus(), 20);
-}
-function closePickPanel(){ $("#lib-pick-panel").hidden = true; }
 function setLoadedLibrary(name){
-  const lbl = $("#lib-pick-label");
-  lbl.textContent = name || "Shared library…";
-  lbl.dataset.loaded = name || "";
   const bar = $("#lib-loaded-bar");
   if(name){ $("#lib-loaded-name").textContent = name; bar.hidden = false; }
   else { bar.hidden = true; }
 }
-$("#lib-pick-btn").addEventListener("click", e=>{
-  e.stopPropagation();
-  if($("#lib-pick-panel").hidden) openPickPanel(); else closePickPanel();
+
+/* ---- top-right dropdown menus ---- */
+const MENUS = [["#menu-library-btn","#menu-library-panel"], ["#menu-io-btn","#menu-io-panel"]];
+function closeMenus(){ MENUS.forEach(([,p])=> { $(p).hidden = true; }); }
+MENUS.forEach(([btnSel, panelSel])=>{
+  $(btnSel).addEventListener("click", e=>{
+    e.stopPropagation();
+    const panel = $(panelSel);
+    const willOpen = panel.hidden;
+    closeMenus();
+    panel.hidden = !willOpen;
+  });
 });
+document.addEventListener("click", closeMenus);
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ closeMenus(); } });
+
+/* ---- Load-from-library modal (searchable) ---- */
+function openLoadModal(){
+  $("#lib-search").value = "";
+  renderPickList("");
+  $("#libload-modal").classList.add("open");
+  setTimeout(()=>$("#lib-search").focus(), 30);
+}
+function closeLoadModal(){ $("#libload-modal").classList.remove("open"); }
+$("#lib-load").addEventListener("click", openLoadModal);
+$("#libload-close").addEventListener("click", closeLoadModal);
+$("#libload-x").addEventListener("click", closeLoadModal);
+$("#libload-modal").addEventListener("click", e=>{ if(e.target===$("#libload-modal")) closeLoadModal(); });
 $("#lib-search").addEventListener("input", e=> renderPickList(e.target.value));
-$("#lib-pick-panel").addEventListener("click", e=> e.stopPropagation());
-document.addEventListener("click", closePickPanel);
-document.addEventListener("keydown", e=>{ if(e.key==="Escape") closePickPanel(); });
 $("#lib-pick-list").addEventListener("click", async e=>{
   const el = e.target.closest(".lib-pick-item"); if(!el) return;
   const id = el.getAttribute("data-id");
   const it = LIB_ITEMS.find(x=>x.id===id);
   const disp = it ? libDisplayName(it) : "";
-  closePickPanel();
+  closeLoadModal();
   try{
     const r = await fetch(LIB_API + "/api/scenarios?id=" + encodeURIComponent(id), {cache:"no-store"});
     if(!r.ok) throw new Error("fetch failed");
