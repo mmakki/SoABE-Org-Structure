@@ -390,11 +390,6 @@
   }
   .file-actions #btn-report:hover{background:#eef6fa; color:var(--teal-dark);}
   .file-actions #btn-report[disabled]{opacity:.6; cursor:progress;}
-  .file-actions #lib-select{
-    background:rgba(255,255,255,.06); color:#eaf3f7; border:1px solid rgba(255,255,255,.3);
-    padding:6px 8px; border-radius:7px; font-size:12px; max-width:180px;
-  }
-  .file-actions #lib-select option{color:#152936;}
   .file-actions #lib-save, .file-actions #lib-manage{background:transparent; color:#cfe2ec; border:1px solid rgba(255,255,255,.3);}
   .file-actions #lib-save[disabled]{opacity:.6; cursor:progress;}
   .modal-overlay{
@@ -464,6 +459,37 @@
   }
   .libman-del:hover{background:#fbeceb;}
   .libman-del[disabled]{opacity:.6; cursor:progress;}
+  .libman-date{color:var(--muted); font-size:11px; margin-left:8px; white-space:nowrap;}
+  /* searchable library picker */
+  .lib-picker{position:relative;}
+  .lib-pick-btn{
+    display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.06); color:#eaf3f7;
+    border:1px solid rgba(255,255,255,.3); padding:6px 8px; border-radius:7px; font-size:12px;
+    max-width:210px; cursor:pointer;
+  }
+  .lib-pick-btn:hover{background:rgba(255,255,255,.12);}
+  #lib-pick-label{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .lib-pick-caret{margin-left:auto; opacity:.8; font-size:10px;}
+  .lib-pick-panel{
+    position:absolute; top:calc(100% + 4px); left:0; z-index:120; width:290px; max-width:80vw;
+    background:#fff; border:1px solid var(--line); border-radius:9px; box-shadow:0 12px 32px rgba(15,32,44,.28); padding:8px;
+  }
+  .lib-search{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:7px; font-size:13px;
+    box-sizing:border-box; margin-bottom:6px; color:var(--ink); font-family:inherit;
+  }
+  .lib-search:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 2px var(--teal-light);}
+  .lib-pick-list{max-height:260px; overflow-y:auto;}
+  .lib-pick-item{
+    padding:8px 10px; border-radius:7px; font-size:13px; color:var(--ink); cursor:pointer; word-break:break-word;
+  }
+  .lib-pick-item:hover{background:var(--teal-light);}
+  .lib-pick-empty{padding:10px; font-size:12.5px; color:var(--muted); text-align:center;}
+  .lib-loaded-bar{
+    background:var(--teal-light); border-bottom:1px solid var(--line); color:var(--ink);
+    font-size:12.5px; padding:7px 16px;
+  }
+  .lib-loaded-bar b{color:var(--teal-dark);}
 </style>
 </head>
 <body>
@@ -489,11 +515,17 @@
     <button class="tab-btn" data-tab="tasks">Task Allocation</button>
   </nav>
   <div class="file-actions">
-    <select id="lib-select" title="Load a saved scenario set from the shared library">
-      <option value="">Shared library…</option>
-    </select>
+    <div class="lib-picker" id="lib-picker">
+      <button type="button" id="lib-pick-btn" class="lib-pick-btn" title="Load a saved scenario set from the shared library">
+        <span id="lib-pick-label">Shared library…</span><span class="lib-pick-caret">&#9662;</span>
+      </button>
+      <div class="lib-pick-panel" id="lib-pick-panel" hidden>
+        <input type="text" id="lib-search" class="lib-search" placeholder="Search saved sets…" autocomplete="off">
+        <div class="lib-pick-list" id="lib-pick-list"></div>
+      </div>
+    </div>
     <button id="lib-save" title="Save the current scenario set to the shared library as a new named entry">Save to library</button>
-    <button id="lib-manage" title="Delete saved sets from the shared library">Manage</button>
+    <button id="lib-manage" title="Delete saved sets from the shared library">Manage library</button>
     <button id="btn-report" title="Create a printable PDF report: source data, a page or two per scenario, and a side-by-side comparison">Export Report</button>
     <button id="btn-excel" title="Download disciplines, leadership roles, service load and task distribution as an Excel workbook">Export Excel</button>
     <button id="btn-export" title="Save a snapshot file you can share or re-load later">Export JSON</button>
@@ -502,6 +534,7 @@
     <input type="file" id="import-file" accept=".json,application/json" style="display:none">
   </div>
 </header>
+<div class="lib-loaded-bar" id="lib-loaded-bar" hidden>Loaded from library: <b id="lib-loaded-name"></b></div>
 
 <main>
   <!-- ================= SOURCE DATA TAB ================= -->
@@ -655,9 +688,9 @@
       <button class="m-x" id="lib-cancel-x" title="Close" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
-      <p class="m-lead">Saves the current set of scenarios as a new named entry anyone with the link can load.</p>
-      <div class="m-group-label">Name</div>
-      <input type="text" id="lib-name" class="m-input" placeholder="e.g. Final structure" autocomplete="off" maxlength="80">
+      <p class="m-lead">Saves the current set of scenarios as a new named entry anyone with the link can load. Each author name + scenario name must be unique.</p>
+      <div class="m-group-label">Author name</div>
+      <input type="text" id="lib-name" class="m-input" placeholder="e.g. Jane Smith" autocomplete="off" maxlength="80">
       <div class="m-group-label">Scenario name <span class="m-opt">(optional)</span></div>
       <input type="text" id="lib-scen" class="m-input" placeholder="e.g. 9-discipline model" autocomplete="off" maxlength="80">
       <p class="m-lead" style="margin:12px 0 0;">Saved as: <b id="lib-preview"></b></p>
@@ -2476,49 +2509,98 @@ async function libList(){
   if(!r.ok) throw new Error("list failed (" + r.status + ")");
   return await r.json();               // [{name, id, uploadedAt}]
 }
+/* ---- Searchable library picker ---- */
+let LIB_ITEMS = [];
+function libFmtDate(iso){
+  if(!iso) return "";
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return "";
+  const mons = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return d.getDate() + " " + mons[d.getMonth()] + " " + d.getFullYear();
+}
+function libDisplayName(it){
+  const dt = libFmtDate(it.uploadedAt);
+  return dt ? (it.name + " - " + dt) : it.name;
+}
+function renderPickList(q){
+  const box = $("#lib-pick-list");
+  if(!LIB_ITEMS.length){ box.innerHTML = '<div class="lib-pick-empty">No saved sets yet.</div>'; return; }
+  const query = (q||"").trim().toLowerCase();
+  const matches = LIB_ITEMS.filter(it=> libDisplayName(it).toLowerCase().includes(query));
+  if(!matches.length){ box.innerHTML = '<div class="lib-pick-empty">No matches.</div>'; return; }
+  box.innerHTML = matches.map(it=>
+    `<div class="lib-pick-item" data-id="${esc(it.id)}">${esc(libDisplayName(it))}</div>`
+  ).join("");
+}
 async function libRefresh(){
-  const sel = $("#lib-select");
+  const lbl = $("#lib-pick-label");
   try{
-    const items = await libList();
-    const opts = ['<option value="">Shared library…</option>'].concat(
-      items.map(it=>`<option value="${esc(it.id)}">${esc(it.name)}</option>`)
-    );
-    sel.innerHTML = opts.join("");
+    LIB_ITEMS = await libList();
+    lbl.textContent = lbl.dataset.loaded || "Shared library…";
+    renderPickList($("#lib-search").value);
   }catch(e){
-    sel.innerHTML = '<option value="">Shared library unavailable</option>';
+    LIB_ITEMS = [];
+    $("#lib-pick-list").innerHTML = '<div class="lib-pick-empty">Shared library unavailable.</div>';
   }
 }
-$("#lib-select").addEventListener("change", async e=>{
-  const id = e.target.value; if(!id) return;
+function openPickPanel(){
+  $("#lib-search").value = "";
+  renderPickList("");
+  $("#lib-pick-panel").hidden = false;
+  setTimeout(()=>$("#lib-search").focus(), 20);
+}
+function closePickPanel(){ $("#lib-pick-panel").hidden = true; }
+function setLoadedLibrary(name){
+  const lbl = $("#lib-pick-label");
+  lbl.textContent = name || "Shared library…";
+  lbl.dataset.loaded = name || "";
+  const bar = $("#lib-loaded-bar");
+  if(name){ $("#lib-loaded-name").textContent = name; bar.hidden = false; }
+  else { bar.hidden = true; }
+}
+$("#lib-pick-btn").addEventListener("click", e=>{
+  e.stopPropagation();
+  if($("#lib-pick-panel").hidden) openPickPanel(); else closePickPanel();
+});
+$("#lib-search").addEventListener("input", e=> renderPickList(e.target.value));
+$("#lib-pick-panel").addEventListener("click", e=> e.stopPropagation());
+document.addEventListener("click", closePickPanel);
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closePickPanel(); });
+$("#lib-pick-list").addEventListener("click", async e=>{
+  const el = e.target.closest(".lib-pick-item"); if(!el) return;
+  const id = el.getAttribute("data-id");
+  const it = LIB_ITEMS.find(x=>x.id===id);
+  const disp = it ? libDisplayName(it) : "";
+  closePickPanel();
   try{
     const r = await fetch(LIB_API + "/api/scenarios?id=" + encodeURIComponent(id), {cache:"no-store"});
     if(!r.ok) throw new Error("fetch failed");
     const doc = await r.json();
     applyImported(doc.state || doc);   // stored as {name, savedAt, state}
+    setLoadedLibrary(disp || (doc.name ? doc.name + (doc.savedAt ? " - " + libFmtDate(doc.savedAt) : "") : ""));
   }catch(err){
     alert("Couldn't load that scenario set from the library.");
   }
-  e.target.value = "";
 });
-// Compose the library entry name as "Name - Scenario name - Date"
-// (scenario name is optional; date is today).
+// The stored name (and the uniqueness key) is "Author name - Scenario name"
+// with NO date. The date shown in the list/label comes from the save time.
 function libDateStr(){
   const d = new Date();
   const mons = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return d.getDate() + " " + mons[d.getMonth()] + " " + d.getFullYear();
 }
-function libFullName(){
+function libStoreName(){
   const nm = $("#lib-name").value.trim();
   const sc = $("#lib-scen").value.trim();
   const parts = [];
   if(nm) parts.push(nm);
   if(sc) parts.push(sc);
-  parts.push(libDateStr());
   return parts.join(" - ");
 }
 function libPreview(){
   $("#lib-note").textContent = "";
-  $("#lib-preview").textContent = libFullName();
+  const base = libStoreName();
+  $("#lib-preview").textContent = base ? (base + " - " + libDateStr()) : "";
   $("#lib-go").disabled = !$("#lib-name").value.trim();
 }
 function openLibModal(){
@@ -2543,7 +2625,7 @@ $("#lib-scen").addEventListener("input", libPreview);
 
 $("#lib-go").addEventListener("click", async ()=>{
   if(!$("#lib-name").value.trim()) return;
-  const name = libFullName();
+  const name = libStoreName();
   const go = $("#lib-go"), was = go.textContent;
   go.disabled = true; go.textContent = "Saving…";
   try{
@@ -2574,7 +2656,7 @@ function renderLibMan(items){
     return;
   }
   box.innerHTML = items.map(it=>
-    `<div class="libman-row"><span class="libman-name">${esc(it.name)}</span>`+
+    `<div class="libman-row"><span class="libman-name">${esc(it.name)}<span class="libman-date">${esc(libFmtDate(it.uploadedAt))}</span></span>`+
     `<button class="libman-del" data-id="${esc(it.id)}" title="Delete this saved set">Delete</button></div>`
   ).join("");
 }
