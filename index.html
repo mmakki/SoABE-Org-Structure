@@ -395,7 +395,7 @@
     padding:6px 8px; border-radius:7px; font-size:12px; max-width:180px;
   }
   .file-actions #lib-select option{color:#152936;}
-  .file-actions #lib-save{background:transparent; color:#cfe2ec; border:1px solid rgba(255,255,255,.3);}
+  .file-actions #lib-save, .file-actions #lib-manage{background:transparent; color:#cfe2ec; border:1px solid rgba(255,255,255,.3);}
   .file-actions #lib-save[disabled]{opacity:.6; cursor:progress;}
   .modal-overlay{
     position:fixed; inset:0; background:rgba(15,32,44,.55); z-index:100;
@@ -452,6 +452,18 @@
   }
   .m-input:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 2px var(--teal-light);}
   .m-opt{font-weight:400; text-transform:none; letter-spacing:0; color:var(--muted);}
+  #lib-note{color:#b3261e; font-weight:600; font-size:12px;}
+  .libman-row{
+    display:flex; align-items:center; gap:10px; padding:9px 11px; border:1px solid var(--line);
+    border-radius:8px; margin-bottom:7px; font-size:13px;
+  }
+  .libman-name{flex:1; word-break:break-word;}
+  .libman-del{
+    background:#fff; color:#b3261e; border:1px solid #e6b4b0; padding:5px 12px; border-radius:7px;
+    font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;
+  }
+  .libman-del:hover{background:#fbeceb;}
+  .libman-del[disabled]{opacity:.6; cursor:progress;}
 </style>
 </head>
 <body>
@@ -481,6 +493,7 @@
       <option value="">Shared library…</option>
     </select>
     <button id="lib-save" title="Save the current scenario set to the shared library as a new named entry">Save to library</button>
+    <button id="lib-manage" title="Delete saved sets from the shared library">Manage</button>
     <button id="btn-report" title="Create a printable PDF report: source data, a page or two per scenario, and a side-by-side comparison">Export Report</button>
     <button id="btn-excel" title="Download disciplines, leadership roles, service load and task distribution as an Excel workbook">Export Excel</button>
     <button id="btn-export" title="Save a snapshot file you can share or re-load later">Export JSON</button>
@@ -653,6 +666,22 @@
       <span class="m-note" id="lib-note"></span>
       <button class="btn-ghost" id="lib-cancel">Cancel</button>
       <button class="btn-primary" id="lib-go">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="libman-modal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="libman-title">
+    <div class="modal-head">
+      <h2 id="libman-title">Manage shared library</h2>
+      <button class="m-x" id="libman-x" title="Close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="m-lead">Delete saved scenario sets. This removes them for everyone with the link and can't be undone.</p>
+      <div id="libman-list"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost" id="libman-close">Close</button>
     </div>
   </div>
 </div>
@@ -2488,6 +2517,7 @@ function libFullName(){
   return parts.join(" - ");
 }
 function libPreview(){
+  $("#lib-note").textContent = "";
   $("#lib-preview").textContent = libFullName();
   $("#lib-go").disabled = !$("#lib-name").value.trim();
 }
@@ -2521,6 +2551,10 @@ $("#lib-go").addEventListener("click", async ()=>{
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({name, state:S})
     });
+    if(r.status===409){
+      $("#lib-note").textContent = "That name is already in use - choose another.";
+      return;                          // keep the popup open so they can rename
+    }
     if(!r.ok) throw new Error("save failed (" + r.status + ")");
     await libRefresh();
     closeLibModal();
@@ -2529,6 +2563,46 @@ $("#lib-go").addEventListener("click", async ()=>{
     alert("Couldn't save to the shared library.\nIf you're opening the file directly, use the hosted (Vercel) version instead.\n\n(" + (err && err.message || err) + ")");
   }finally{
     go.disabled = false; go.textContent = was;
+  }
+});
+
+/* ---- Manage library (delete saved sets) ---- */
+function renderLibMan(items){
+  const box = $("#libman-list");
+  if(!items || !items.length){
+    box.innerHTML = '<p class="m-lead" style="margin:0;">No saved sets yet.</p>';
+    return;
+  }
+  box.innerHTML = items.map(it=>
+    `<div class="libman-row"><span class="libman-name">${esc(it.name)}</span>`+
+    `<button class="libman-del" data-id="${esc(it.id)}" title="Delete this saved set">Delete</button></div>`
+  ).join("");
+}
+async function openLibMan(){
+  $("#libman-list").innerHTML = '<p class="m-lead" style="margin:0;">Loading…</p>';
+  $("#libman-modal").classList.add("open");
+  try{ renderLibMan(await libList()); }
+  catch(e){ $("#libman-list").innerHTML = '<p class="m-lead" style="margin:0;">Couldn\'t load the library.</p>'; }
+}
+function closeLibMan(){ $("#libman-modal").classList.remove("open"); }
+$("#lib-manage").addEventListener("click", openLibMan);
+$("#libman-close").addEventListener("click", closeLibMan);
+$("#libman-x").addEventListener("click", closeLibMan);
+$("#libman-modal").addEventListener("click", e=>{ if(e.target===$("#libman-modal")) closeLibMan(); });
+$("#libman-list").addEventListener("click", async e=>{
+  const btn = e.target.closest(".libman-del"); if(!btn) return;
+  const id = btn.getAttribute("data-id");
+  const nm = btn.parentElement.querySelector(".libman-name").textContent;
+  if(!confirm('Delete "'+nm+'" from the shared library? This can\'t be undone.')) return;
+  btn.disabled = true; btn.textContent = "Deleting…";
+  try{
+    const r = await fetch(LIB_API + "/api/scenarios?id=" + encodeURIComponent(id), {method:"DELETE"});
+    if(!r.ok) throw new Error("delete failed (" + r.status + ")");
+    renderLibMan(await libList());
+    await libRefresh();
+  }catch(err){
+    alert("Couldn't delete that set.\n\n(" + (err && err.message || err) + ")");
+    btn.disabled = false; btn.textContent = "Delete";
   }
 });
 
