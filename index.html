@@ -739,20 +739,20 @@
    on purpose - you allocate them in the Task Allocation tab).
 ============================================================ */
 const PROGRAMS = [
-  {id:"p01", name:"UG Construction Project Mgmt",  students:852, fte:8.9,  credits:192},
-  {id:"p02", name:"Construction Management (PG)",  students:14,  fte:0.4,  credits:48},
-  {id:"p03", name:"Project Management (PG)",       students:122, fte:4.0,  credits:144},
-  {id:"p04", name:"UG Property Economics",         students:493, fte:6.3,  credits:144},
-  {id:"p05", name:"Property Development (PG)",     students:46,  fte:0.9,  credits:72},
-  {id:"p06", name:"Planning (PG)",                 students:56,  fte:2.65, credits:96},
-  {id:"p07", name:"Real Estate Investment (PG)",   students:35,  fte:0.25, credits:102},
-  {id:"p08", name:"Property Development (OPM)",    students:196, fte:0.2,  credits:72},
-  {id:"p09", name:"Urban Planning (OPM)",          students:110, fte:1.5,  credits:90},
-  {id:"p10", name:"UG Architecture",               students:709, fte:10.1, credits:144},
-  {id:"p11", name:"PG Architecture",               students:256, fte:7.0,  credits:96},
-  {id:"p12", name:"UG Landscape Architecture",     students:173, fte:4.5,  credits:192},
-  {id:"p13", name:"UG Interior Architecture",      students:480, fte:6.3,  credits:144},
-  {id:"p14", name:"Criminology",                   students:659, fte:2.0,  credits:144}
+  {id:"p01", name:"UG Construction Project Mgmt",  students:852, fte:8.9},
+  {id:"p02", name:"Construction Management (PG)",  students:14,  fte:0.4},
+  {id:"p03", name:"Project Management (PG)",       students:122, fte:4.0},
+  {id:"p04", name:"UG Property Economics",         students:493, fte:6.3},
+  {id:"p05", name:"Property Development (PG)",     students:46,  fte:0.9},
+  {id:"p06", name:"Planning (PG)",                 students:56,  fte:2.65},
+  {id:"p07", name:"Real Estate Investment (PG)",   students:35,  fte:0.25},
+  {id:"p08", name:"Property Development (OPM)",    students:196, fte:0.2},
+  {id:"p09", name:"Urban Planning (OPM)",          students:110, fte:1.5},
+  {id:"p10", name:"UG Architecture",               students:709, fte:10.1},
+  {id:"p11", name:"PG Architecture",               students:256, fte:7.0},
+  {id:"p12", name:"UG Landscape Architecture",     students:173, fte:4.5},
+  {id:"p13", name:"UG Interior Architecture",      students:480, fte:6.3},
+  {id:"p14", name:"Criminology",                   students:659, fte:2.0}
 ];
 
 const CL="Course Leadership", SM="Student Management", IE="Industry Engagement",
@@ -896,9 +896,9 @@ const fmt = n => n.toLocaleString("en-AU");
 const fmt1 = n => (Math.round(n*100)/100).toLocaleString("en-AU");
 const assignedIds = () => new Set(S.disciplines.flatMap(d=>d.programIds));
 function discTotals(d){
-  let st=0, fte=0, cr=0;
-  d.programIds.forEach(id=>{ const p=prog(id); if(p){ st+=p.students; fte+=p.fte; cr+=(p.credits||0); } });
-  return {students:st, fte:fte, credits:cr, n:d.programIds.length};
+  let st=0, fte=0;
+  d.programIds.forEach(id=>{ const p=prog(id); if(p){ st+=p.students; fte+=p.fte; } });
+  return {students:st, fte:fte, n:d.programIds.length};
 }
 let uid = 0;
 const newId = () => "d" + Date.now().toString(36) + (uid++);
@@ -910,7 +910,6 @@ function chipHTML(p, removable){
     ${removable ? '<button class="chip-x" title="Remove from this discipline (returns to the program pool)">✕</button>' : ''}
     <span class="c-name">${esc(p.name)}</span>
     <span class="c-meta"><b>${fmt(p.students)}</b> students · <b>${fmt1(p.fte)}</b> FTE</span>
-    <span class="c-meta"><b>${fmt(p.credits)}</b> credit points</span>
   </div>`;
 }
 function renderPool(){
@@ -942,7 +941,6 @@ function renderDiscs(){
         <span class="stat"><b>${t.n}</b> programs</span>
         <span class="stat"><b>${fmt(t.students)}</b> students</span>
         <span class="stat"><b>${fmt1(t.fte)}</b> FTE</span>
-        <span class="stat"><b>${fmt(t.credits)}</b> credits</span>
         <label class="svc">HoD service <input type="number" class="hod-svc" value="${d.hodSvc}" min="0" max="100" step="5">%</label>
         ${d.ccs.map((c,i)=>`<span class="cc-item">CC
           <input type="text" class="cc-name" data-cc="${i}" value="${esc(c.name||"")}" placeholder="name" title="Course Coordinator name">
@@ -961,7 +959,6 @@ function renderStats(){
   const nCC = S.disciplines.reduce((a,d)=>a+d.ccs.length,0);
   const totSt = PROGRAMS.reduce((a,p)=>a+p.students,0);
   const totF  = PROGRAMS.reduce((a,p)=>a+p.fte,0);
-  const totCr = PROGRAMS.reduce((a,p)=>a+(p.credits||0),0);
   const hodSvc = S.disciplines.reduce((a,d)=>a + (+d.hodSvc||0), 0);
   const ccSvc  = S.disciplines.reduce((a,d)=>a + d.ccs.reduce((x,c)=>x+(+c.svc||0),0), 0);
   const e = S.exec;
@@ -974,7 +971,6 @@ function renderStats(){
     [nCC, "Course Coordinators"],
     [fmt(totSt), "Students (school)"],
     [fmt1(totF), "Staff FTE (school)"],
-    [fmt(totCr), "Credit points (school)"],
     [fmt1(totalSvc)+"%", "Total service"]
   ];
   $("#stats-grid").innerHTML = cards.map(c=>`<div class="stat-card"><div class="v">${c[0]}</div><div class="l">${c[1]}</div></div>`).join("");
@@ -1030,7 +1026,7 @@ function renderChart(){
     boxes += box(cx, yRow, BW, hHod, "ob-hod",
       `<span class="role">Head of Discipline</span><span class="nm">${esc(d.name)}</span>
        <span class="mt">${t.n} program${t.n===1?"":"s"} · ${fmt(t.students)} students</span>
-       <span class="mt">${fmt(t.credits)} credits · ${fmt1(t.fte)} FTE${svcTag(d.hodSvc)}</span>`);
+       <span class="mt">${fmt1(t.fte)} FTE${svcTag(d.hodSvc)}</span>`);
     if(d.ccs.length){
       // CCs stack below the HoD; a trunk drops on their left and feeds each one equally from the side
       const bx = cx + 12;                 // CC boxes nudged right to make room for the trunk
@@ -1067,7 +1063,6 @@ function renderChart(){
 const CMP_METRICS = [
   {key:"students", label:"Students",               fmt:v=>fmt(v),        color:"var(--teal)"},
   {key:"fte",      label:"Staff FTE",              fmt:v=>fmt1(v),       color:"var(--teal-mid)"},
-  {key:"credits",  label:"Credit points",         fmt:v=>fmt(v),        color:"var(--red)"},
   {key:"programs", label:"Programs",               fmt:v=>v,             color:"var(--slate)"},
   {key:"ccs",      label:"Course Coordinators",    fmt:v=>v,             color:"var(--green)"},
   {key:"svc",      label:"Service allocation",     fmt:v=>fmt1(v)+"%", color:"var(--amber)"},
@@ -1094,7 +1089,6 @@ function renderCompare(){
       name: d.name,
       students: t.students,
       fte: t.fte,
-      credits: t.credits,
       programs: t.n,
       ccs: d.ccs.length,
       svc: (+d.hodSvc||0) + d.ccs.reduce((x,c)=>x+(+c.svc||0),0),
@@ -1168,7 +1162,7 @@ function scenTotals(sc){
   const ds = sc.disciplines || [];
   const rows = ds.map(d=>{
     const t = discTotals(d);
-    return {name:d.name, students:t.students, fte:t.fte, credits:t.credits, programs:t.n,
+    return {name:d.name, students:t.students, fte:t.fte, programs:t.n,
             ccs:d.ccs.length, svc:(+d.hodSvc||0) + d.ccs.reduce((x,c)=>x+(+c.svc||0),0)};
   });
   const grouped = new Set(ds.flatMap(d=>d.programIds)).size;
@@ -1178,7 +1172,7 @@ function scenTotals(sc){
   const mx = a => a.length ? Math.max(...a) : 0;
   const mn = a => nz(a).length ? Math.min(...nz(a)) : 0;   // smallest non-zero (ignores empty disciplines)
   const mnAll = a => a.length ? Math.min(...a) : 0;         // true smallest (counts can be 0)
-  const progA = rows.map(r=>r.programs), ccA = rows.map(r=>r.ccs), crA = rows.map(r=>r.credits);
+  const progA = rows.map(r=>r.programs), ccA = rows.map(r=>r.ccs);
   const nCC = rows.reduce((a,r)=>a+r.ccs,0);
   const hodSvc = rows.reduce((a,r)=>a+(+ds[rows.indexOf(r)].hodSvc||0),0);
   const svcTot = rows.reduce((a,r)=>a+r.svc,0) + (+e.hosSvc||0)+(+e.ahosEduSvc||0)+(+e.ahosResSvc||0);
@@ -1189,16 +1183,15 @@ function scenTotals(sc){
     maxSt:mx(stA), minSt:mn(stA), ratioSt: mn(stA)>0 ? mx(stA)/mn(stA) : 0,
     maxProg:mx(progA), minProg:mnAll(progA),
     maxCC:mx(ccA), minCC:mnAll(ccA),
-    maxCr:mx(crA), minCr:mnAll(crA),
     ...(function(){
       // Per-metric ratio = largest / smallest across disciplines (raw values).
       // A metric is skipped (ratio 0 = "n/a") only when its smallest value is 0, since largest / 0 is undefined.
       const ratioOf = a => (a.length && Math.min(...a) > 0) ? Math.max(...a)/Math.min(...a) : 0;
-      const rCc = ratioOf(ccA), rProg = ratioOf(progA), rFte = ratioOf(fteA), rSt = ratioOf(stA), rCr = ratioOf(crA);
+      const rCc = ratioOf(ccA), rProg = ratioOf(progA), rFte = ratioOf(fteA), rSt = ratioOf(stA);
       // Discipline Balance Score = GEOMETRIC mean of the defined ratios. 1.0 = perfect balance; lower is better.
-      const defined = [rCc, rProg, rFte, rSt, rCr].filter(x=>x>0);
+      const defined = [rCc, rProg, rFte, rSt].filter(x=>x>0);
       const balance = defined.length ? Math.pow(defined.reduce((a,b)=>a*b,1), 1/defined.length) : 0;
-      return { rCc, rProg, rFte, rSt, rCr, balance };
+      return { rCc, rProg, rFte, rSt, balance };
     })()
   };
 }
@@ -1353,14 +1346,12 @@ function renderScenCompare(){
       ${rangeRow("Students range","smallest - largest discipline","minSt","maxSt",v=>fmt(v))}
       ${rangeRow("Programs per discipline range","smallest - largest discipline","minProg","maxProg",v=>v)}
       ${rangeRow("Course Coordinators per discipline range","smallest - largest discipline","minCC","maxCC",v=>v)}
-      ${rangeRow("Credits per discipline range","smallest - largest discipline","minCr","maxCr",v=>fmt(v))}
 
       ${sec("Discipline balance score")}
       ${metricRatioRow("Course Coordinators", "rCc", "maxCC")}
       ${metricRatioRow("Programs", "rProg", "maxProg")}
       ${metricRatioRow("Staff FTE", "rFte", "maxFte")}
       ${metricRatioRow("Students", "rSt", "maxSt")}
-      ${metricRatioRow("Credits", "rCr", "maxCr")}
       ${(()=>{ const bv=T.map(t=>t.n?t.balance:0);
         return `<tr data-hl="1"><td>Discipline balance score<span class="sub">geometric mean of the ratios above - lower = more balanced (1.0 = perfect)</span></td>`+
           T.map((t,i)=>`<td${flag(bv,i,true)}>${t.n&&t.balance?fmtRatio(t.balance):"-"}</td>`).join("")+`</tr>`; })()}
@@ -1386,21 +1377,20 @@ function renderDiscData(container){
   let rows = S.disciplines.map(d=>{
     const t = discTotals(d);
     const spf = t.fte>0 ? t.students/t.fte : 0;
-    return { id:d.id, name:d.name, programs:t.n, ccs:d.ccs.length, students:t.students, fte:t.fte, credits:t.credits,
+    return { id:d.id, name:d.name, programs:t.n, ccs:d.ccs.length, students:t.students, fte:t.fte,
       spf, pctSt: totalSt? t.students/totalSt*100:0, pctFte: totalFte? t.fte/totalFte*100:0,
       progList: d.programIds.map(id=>prog(id)).filter(Boolean) };
   });
   const used = assignedIds();
   const ung = PROGRAMS.filter(p=>!used.has(p.id));
 
-  const gSt = rows.reduce((a,r)=>a+r.students,0), gFte = rows.reduce((a,r)=>a+r.fte,0), gCr = rows.reduce((a,r)=>a+r.credits,0);
+  const gSt = rows.reduce((a,r)=>a+r.students,0), gFte = rows.reduce((a,r)=>a+r.fte,0);
   const gSpf = gFte>0 ? gSt/gFte : 0;
   const cards = [
     [S.disciplines.length, "Disciplines"],
     [PROGRAMS.length - ung.length, "Programs grouped"],
     [fmt(gSt), "Students"],
     [fmt1(gFte), "Staff FTE"],
-    [fmt(gCr), "Credit points"],
     [fmt1(gSpf), "Students per FTE"]
   ];
   const hint = ung.length ? `${ung.length} program${ung.length===1?"":"s"} not yet grouped into a discipline` : "every program is grouped into a discipline";
@@ -1414,7 +1404,7 @@ function renderDiscData(container){
 
   const cols = [
     ["name","Discipline"], ["programs","Programs"], ["ccs","Course Coordinators"], ["students","Students"], ["fte","Staff FTE"],
-    ["credits","Credits"], ["spf","Students / FTE"], ["pctSt","% students"], ["pctFte","% FTE"]
+    ["spf","Students / FTE"], ["pctSt","% students"], ["pctFte","% FTE"]
   ];
   const head = "<tr>" + cols.map(c=>{
     const on = dataSortDisc.key===c[0];
@@ -1423,11 +1413,10 @@ function renderDiscData(container){
   }).join("") + "</tr>";
 
   const subTable = (progs, base) => `<table class="ctable">
-      <tr><th>Program</th><th style="text-align:right">Students</th><th style="text-align:right">Staff FTE</th><th style="text-align:right">Credits</th><th style="text-align:right">% of discipline</th></tr>
+      <tr><th>Program</th><th style="text-align:right">Students</th><th style="text-align:right">Staff FTE</th><th style="text-align:right">% of discipline</th></tr>
       ${progs.map(pg=>`<tr><td class="cname">${esc(pg.name)}</td>
         <td style="text-align:right">${fmt(pg.students)}</td>
         <td style="text-align:right">${fmt1(pg.fte)}</td>
-        <td style="text-align:right">${fmt(pg.credits||0)}</td>
         <td style="text-align:right">${base?fmt1(pg.students/base*100):"0"}%</td></tr>`).join("")}
     </table>`;
 
@@ -1439,7 +1428,6 @@ function renderDiscData(container){
       <td>${r.ccs}</td>
       <td>${fmt(r.students)}</td>
       <td>${fmt1(r.fte)}</td>
-      <td>${fmt(r.credits)}</td>
       <td>${fmt1(r.spf)}</td>
       <td>${fmt1(r.pctSt)}%</td>
       <td>${fmt1(r.pctFte)}%</td>
@@ -1453,10 +1441,10 @@ function renderDiscData(container){
 
   if(ung.length){
     const open = expandedDisc.has("__ung");
-    const ungSt = ung.reduce((a,p)=>a+p.students,0), ungFte = ung.reduce((a,p)=>a+p.fte,0), ungCr = ung.reduce((a,p)=>a+(p.credits||0),0);
+    const ungSt = ung.reduce((a,p)=>a+p.students,0), ungFte = ung.reduce((a,p)=>a+p.fte,0);
     const prow = `<tr class="prow" data-dd="__ung" style="color:var(--muted)">
       <td><span class="pexp">${open?"\u25BE":"\u25B8"}</span><i>Ungrouped</i></td>
-      <td>${ung.length}</td><td>0</td><td>${fmt(ungSt)}</td><td>${fmt1(ungFte)}</td><td>${fmt(ungCr)}</td>
+      <td>${ung.length}</td><td>0</td><td>${fmt(ungSt)}</td><td>${fmt1(ungFte)}</td>
       <td>${ungFte>0?fmt1(ungSt/ungFte):"0"}</td>
       <td>${totalSt?fmt1(ungSt/totalSt*100):"0"}%</td><td>${totalFte?fmt1(ungFte/totalFte*100):"0"}%</td></tr>`;
     body += prow + (open ? `<tr class="comp-row"><td colspan="${cols.length}">${subTable(ung, ungSt)}</td></tr>` : "");
@@ -1464,7 +1452,7 @@ function renderDiscData(container){
 
   const total = `<tr class="total">
     <td>Grouped total</td><td>${rows.reduce((a,r)=>a+r.programs,0)}</td><td>${rows.reduce((a,r)=>a+r.ccs,0)}</td><td>${fmt(gSt)}</td><td>${fmt1(gFte)}</td>
-    <td>${fmt(gCr)}</td><td>${fmt1(gSpf)}</td>
+    <td>${fmt1(gSpf)}</td>
     <td>${totalSt?fmt1(gSt/totalSt*100):"0"}%</td><td>${totalFte?fmt1(gFte/totalFte*100):"0"}%</td></tr>`;
 
   const tableInner = (rows.length || ung.length)
@@ -1677,22 +1665,21 @@ $("#btn-excel").addEventListener("click", async ()=>{
   // ----- Sheet 1: Source Data (mirrors the Source Data tab: programs + course composition) -----
   const sdTotSt = PROGRAMS.reduce((a,p)=>a+p.students,0);
   const sdTotFte = PROGRAMS.reduce((a,p)=>a+p.fte,0);
-  const sdTotCr = PROGRAMS.reduce((a,p)=>a+(p.credits||0),0);
   const sdTotCourses = PROGRAMS.reduce((a,p)=>a+((COMPOSITION[p.id]||[]).length),0);
   const sdSpf = sdTotFte>0 ? sdTotSt/sdTotFte : 0;
   const r1 = n => Math.round(n*10)/10;
-  const sd = [["Program / course code","Course name","Students","Staff FTE","Credits","Students per FTE","% of school students","% of school FTE","% of program"]];
+  const sd = [["Program / course code","Course name","Students","Staff FTE","Students per FTE","% of school students","% of school FTE","% of program"]];
   PROGRAMS.forEach(p=>{
     const spf = p.fte>0 ? p.students/p.fte : 0;
-    sd.push([p.name, "", p.students, r1(p.fte), p.credits||0, r1(spf),
+    sd.push([p.name, "", p.students, r1(p.fte), r1(spf),
              r1(sdTotSt?p.students/sdTotSt*100:0), r1(sdTotFte?p.fte/sdTotFte*100:0), ""]);
     (COMPOSITION[p.id]||[]).forEach(c=>{
-      sd.push(["    "+c[0], c[1], c[2], "", "", "", "", "", r1(p.students?c[2]/p.students*100:0)]);
+      sd.push(["    "+c[0], c[1], c[2], "", "", "", "", r1(p.students?c[2]/p.students*100:0)]);
     });
   });
-  sd.push(["School total", "", sdTotSt, r1(sdTotFte), sdTotCr, r1(sdSpf), 100, 100, ""]);
+  sd.push(["School total", "", sdTotSt, r1(sdTotFte), r1(sdSpf), 100, 100, ""]);
   const ws0 = XLSX.utils.aoa_to_sheet(sd);
-  ws0["!cols"] = [{wch:40},{wch:46},{wch:10},{wch:10},{wch:9},{wch:16},{wch:18},{wch:16},{wch:14}];
+  ws0["!cols"] = [{wch:40},{wch:46},{wch:10},{wch:10},{wch:16},{wch:18},{wch:16},{wch:14}];
   XLSX.utils.book_append_sheet(wb, ws0, "Source Data");
 
   const nDisc = S.disciplines.length, nCC = S.disciplines.reduce((a,d)=>a+d.ccs.length,0);
@@ -1713,10 +1700,10 @@ $("#btn-excel").addEventListener("click", async ()=>{
   ws1["!cols"] = [{wch:46},{wch:8},{wch:15}];
   XLSX.utils.book_append_sheet(wb, ws1, "Leadership & Service");
 
-  const disc = [["Discipline","Programs","Students","Credit points","Staff FTE","HoD service %","CCs","CC names","CC service % (each)","CC service % (total)"],
+  const disc = [["Discipline","Programs","Students","Staff FTE","HoD service %","CCs","CC names","CC service % (each)","CC service % (total)"],
     ...S.disciplines.map(d=>{
       const t = discTotals(d);
-      return [d.name, t.n, t.students, t.credits, Math.round(t.fte*100)/100, +d.hodSvc||0,
+      return [d.name, t.n, t.students, Math.round(t.fte*100)/100, +d.hodSvc||0,
               d.ccs.length,
               d.ccs.map(c=>c.name||"-").join(", "),
               d.ccs.map(c=>+c.svc||0).join(", "),
@@ -1724,16 +1711,16 @@ $("#btn-excel").addEventListener("click", async ()=>{
     })];
 
   const ws2 = XLSX.utils.aoa_to_sheet(disc);
-  ws2["!cols"] = [{wch:32},{wch:9},{wch:9},{wch:13},{wch:9},{wch:13},{wch:5},{wch:28},{wch:18},{wch:16}];
+  ws2["!cols"] = [{wch:32},{wch:9},{wch:9},{wch:9},{wch:13},{wch:5},{wch:28},{wch:18},{wch:16}];
   XLSX.utils.book_append_sheet(wb, ws2, "Disciplines");
 
-  const progs = [["Program","Students (2026)","Credit points","Staff FTE","Discipline"],
+  const progs = [["Program","Students (2026)","Staff FTE","Discipline"],
     ...PROGRAMS.map(p=>{
       const d = S.disciplines.find(d=>d.programIds.includes(p.id));
-      return [p.name, p.students, p.credits, p.fte, d ? d.name : "Ungrouped"];
+      return [p.name, p.students, p.fte, d ? d.name : "Ungrouped"];
     })];
   const ws3 = XLSX.utils.aoa_to_sheet(progs);
-  ws3["!cols"] = [{wch:34},{wch:14},{wch:13},{wch:9},{wch:30}];
+  ws3["!cols"] = [{wch:34},{wch:14},{wch:9},{wch:30}];
   XLSX.utils.book_append_sheet(wb, ws3, "Programs");
 
   const label = {none:"Unassigned", ahos:"AHoS - Education & Students", hod:"Head of Discipline", cc:"Course Coordinator"};
@@ -1762,8 +1749,8 @@ $("#btn-excel").addEventListener("click", async ()=>{
   scRows.push([]);
   scRows.push(["Discipline detail (per scenario)"]);
   S.scenarios.forEach((sc,i)=>{
-    scRows.push([sc.name, "Programs","Students","Credits","Staff FTE","Service %"]);
-    ST[i].rows.forEach(r=>scRows.push(["  "+r.name, r.programs, r.students, r.credits, Math.round(r.fte*100)/100, r.svc]));
+    scRows.push([sc.name, "Programs","Students","Staff FTE","Service %"]);
+    ST[i].rows.forEach(r=>scRows.push(["  "+r.name, r.programs, r.students, Math.round(r.fte*100)/100, r.svc]));
   });
   const ws5 = XLSX.utils.aoa_to_sheet(scRows);
   ws5["!cols"] = [{wch:40}, ...S.scenarios.map(()=>({wch:20})), {wch:12},{wch:12},{wch:12}];
@@ -1873,7 +1860,7 @@ function orgChartCanvas(ds, exec){
       {t:"Head of Discipline",font:fRole,color:C.teal,lh:14},
       {t:d.name,font:fName,color:C.ink,lh:15},
       {t:`${t.n} program${t.n===1?"":"s"} · ${fmt(t.students)} students`,font:fMeta,color:"#44606e",lh:13},
-      {t:fmt(t.credits)+" credits · "+fmt1(t.fte)+" FTE"+(+d.hodSvc>0?` · ${fmt1(+d.hodSvc)}% svc`:""),font:fMeta,color:"#44606e",lh:13}
+      {t:fmt1(t.fte)+" FTE"+(+d.hodSvc>0?` · ${fmt1(+d.hodSvc)}% svc`:""),font:fMeta,color:"#44606e",lh:13}
     ]);
     if(d.ccs.length){
       const bx = cx + 12;
@@ -1980,7 +1967,6 @@ const expandedData = new Set();
 function renderData(){
   const totalSt = PROGRAMS.reduce((a,p)=>a+p.students,0);
   const totalFte = PROGRAMS.reduce((a,p)=>a+p.fte,0);
-  const totalCr = PROGRAMS.reduce((a,p)=>a+(p.credits||0),0);
   const totalCourses = PROGRAMS.reduce((a,p)=>a+((COMPOSITION[p.id]||[]).length),0);
   const schoolSpf = totalFte>0 ? totalSt/totalFte : 0;
 
@@ -1989,7 +1975,6 @@ function renderData(){
     [totalCourses, "Courses"],
     [fmt(totalSt), "Students"],
     [fmt1(totalFte), "Staff FTE"],
-    [fmt(totalCr), "Credit points"],
     [fmt1(schoolSpf), "Students per FTE (school)"]
   ];
   $("#data-stats").innerHTML = cards.map(c=>`<div class="stat-card"><div class="v">${c[0]}</div><div class="l">${c[1]}</div></div>`).join("");
@@ -1997,7 +1982,7 @@ function renderData(){
   let rows = PROGRAMS.map(p=>{
     const comp = COMPOSITION[p.id] || [];
     const spf = p.fte>0 ? p.students/p.fte : 0;
-    return { p, comp, courses:comp.length, students:p.students, fte:p.fte, credits:p.credits||0,
+    return { p, comp, courses:comp.length, students:p.students, fte:p.fte,
       spf, pctSt: totalSt? p.students/totalSt*100:0, pctFte: totalFte? p.fte/totalFte*100:0,
       load: schoolSpf>0 ? spf/schoolSpf : 0 };
   });
@@ -2010,7 +1995,7 @@ function renderData(){
 
   const cols = [
     ["name","Program"], ["courses","Courses"], ["students","Students"], ["fte","Staff FTE"],
-    ["credits","Credits"], ["spf","Students / FTE"], ["pctSt","% students"], ["pctFte","% FTE"]
+    ["spf","Students / FTE"], ["pctSt","% students"], ["pctFte","% FTE"]
   ];
   const head = "<tr>" + cols.map(c=>{
     const on = dataSort.key===c[0];
@@ -2025,7 +2010,6 @@ function renderData(){
       <td>${r.courses}</td>
       <td>${fmt(r.students)}</td>
       <td>${fmt1(r.fte)}</td>
-      <td>${fmt(r.credits)}</td>
       <td>${fmt1(r.spf)}</td>
       <td>${fmt1(r.pctSt)}%</td>
       <td>${fmt1(r.pctFte)}%</td>
@@ -2042,7 +2026,7 @@ function renderData(){
 
   const total = `<tr class="total">
     <td>School total</td><td>${totalCourses}</td><td>${fmt(totalSt)}</td><td>${fmt1(totalFte)}</td>
-    <td>${fmt(totalCr)}</td><td>${fmt1(schoolSpf)}</td><td>100%</td><td>100%</td></tr>`;
+    <td>${fmt1(schoolSpf)}</td><td>100%</td><td>100%</td></tr>`;
 
   $("#data-table").innerHTML = head + body + total;
   $("#data-legend").innerHTML =
@@ -2110,7 +2094,6 @@ async function generateReport(scenIds, opts){
   const METRICS = [
     {key:"students", label:"Students",             color:[22,96,126]},
     {key:"fte",      label:"Staff FTE",            color:[74,140,170]},
-    {key:"credits",  label:"Credit points",        color:[176,73,47]},
     {key:"programs", label:"Programs",             color:[84,112,126]},
     {key:"ccs",      label:"Course Coordinators",  color:[46,125,91]},
     {key:"svc",      label:"Service allocation",   color:[185,122,31]},
@@ -2186,7 +2169,6 @@ async function generateReport(scenIds, opts){
   const scs = S.scenarios.filter(sc=>scenIds.includes(sc.id));
   const totalSt = PROGRAMS.reduce((a,p)=>a+p.students,0);
   const totalFte = PROGRAMS.reduce((a,p)=>a+p.fte,0);
-  const totalCr = PROGRAMS.reduce((a,p)=>a+(p.credits||0),0);
   const totalCourses = PROGRAMS.reduce((a,p)=>a+((COMPOSITION[p.id]||[]).length),0);
   const schoolSpf = totalFte>0 ? totalSt/totalFte : 0;
   const dstamp = new Date();
@@ -2232,23 +2214,23 @@ async function generateReport(scenIds, opts){
     let y = banner("Source data", "SoABE Program Summary (2026) - the numbers that drive every scenario", SRC);
     y = statTiles([
       [PROGRAMS.length,"Programs"], [totalCourses,"Courses"], [fmt(totalSt),"Students"],
-      [fmt1(totalFte),"Staff FTE"], [fmt(totalCr),"Credit points"], [fmt1(schoolSpf),"Students / FTE"]
+      [fmt1(totalFte),"Staff FTE"], [fmt1(schoolSpf),"Students / FTE"]
     ], y+2) + 20;
 
     y = tableTitle("Programs", y);
     const progBody = PROGRAMS.map(p=>{
       const comp=COMPOSITION[p.id]||[], spf=p.fte>0?p.students/p.fte:0;
-      return [p.name, comp.length, fmt(p.students), fmt1(p.fte), fmt(p.credits||0), fmt1(spf),
+      return [p.name, comp.length, fmt(p.students), fmt1(p.fte), fmt1(spf),
               fmt1(totalSt?p.students/totalSt*100:0)+"%", fmt1(totalFte?p.fte/totalFte*100:0)+"%"];
     });
     y = table({
       startY:y,
-      head:[["Program","Courses","Students","Staff FTE","Credits","Students / FTE","% students","% FTE"]],
+      head:[["Program","Courses","Students","Staff FTE","Students / FTE","% students","% FTE"]],
       body:progBody,
-      foot:[["School total", totalCourses, fmt(totalSt), fmt1(totalFte), fmt(totalCr), fmt1(schoolSpf), "100%", "100%"]],
+      foot:[["School total", totalCourses, fmt(totalSt), fmt1(totalFte), fmt1(schoolSpf), "100%", "100%"]],
       headStyles:{fillColor:SRC, textColor:255, fontStyle:'bold', fontSize:8},
       footStyles:{fillColor:SRCLIGHT, textColor:SRC, fontStyle:'bold'},
-      columnStyles:Object.assign({0:{cellWidth:150}}, rightCols(1,7))
+      columnStyles:Object.assign({0:{cellWidth:150}}, rightCols(1,6))
     }) + 22;
 
     y = tableTitle("Course composition", y);
@@ -2276,7 +2258,7 @@ async function generateReport(scenIds, opts){
     // per-discipline rows (mirror the Discipline Comparison data view)
     const rows = ds.map(d=>{
       const x=discTotals(d);
-      return { name:d.name, programs:x.n, ccs:d.ccs.length, students:x.students, fte:x.fte, credits:x.credits,
+      return { name:d.name, programs:x.n, ccs:d.ccs.length, students:x.students, fte:x.fte,
                svc:(+d.hodSvc||0)+d.ccs.reduce((a,c)=>a+(+c.svc||0),0),
                perFte: x.fte>0 ? x.students/x.fte : 0,
                pctSt: totalSt ? x.students/totalSt*100 : 0, pctFte: totalFte ? x.fte/totalFte*100 : 0 };
@@ -2294,16 +2276,16 @@ async function generateReport(scenIds, opts){
     ], y+2) + 20;
 
     y = tableTitle("Disciplines at a glance", y);
-    const gSt=sum("students"), gFte=sum("fte"), gCr=sum("credits");
-    const dataBody = rows.map(r=>[r.name, r.programs, r.ccs, fmt(r.students), fmt1(r.fte), fmt(r.credits),
+    const gSt=sum("students"), gFte=sum("fte");
+    const dataBody = rows.map(r=>[r.name, r.programs, r.ccs, fmt(r.students), fmt1(r.fte),
                                   fmt1(r.perFte), fmt1(r.pctSt)+"%", fmt1(r.pctFte)+"%"]);
     y = table({
       startY:y,
-      head:[["Discipline","Programs","Course Coordinators","Students","Staff FTE","Credits","Students / FTE","% students","% FTE"]],
-      body: dataBody.length ? dataBody : [[{content:"No disciplines in this scenario.", colSpan:9, styles:{textColor:MUTED, fontStyle:'italic'}}]],
-      foot: dataBody.length ? [["Grouped total", sum("programs"), sum("ccs"), fmt(gSt), fmt1(gFte), fmt(gCr),
+      head:[["Discipline","Programs","Course Coordinators","Students","Staff FTE","Students / FTE","% students","% FTE"]],
+      body: dataBody.length ? dataBody : [[{content:"No disciplines in this scenario.", colSpan:8, styles:{textColor:MUTED, fontStyle:'italic'}}]],
+      foot: dataBody.length ? [["Grouped total", sum("programs"), sum("ccs"), fmt(gSt), fmt1(gFte),
                                 fmt1(gFte>0?gSt/gFte:0), fmt1(totalSt?gSt/totalSt*100:0)+"%", fmt1(totalFte?gFte/totalFte*100:0)+"%"]] : undefined,
-      columnStyles:Object.assign({0:{cellWidth:110}}, rightCols(1,8))
+      columnStyles:Object.assign({0:{cellWidth:110}}, rightCols(1,7))
     }) + 22;
 
     y = tableTitle("Leadership roles & service load", y);
@@ -2378,13 +2360,11 @@ async function generateReport(scenIds, opts){
       cRow("Students", t=>rng(t,"minSt","maxSt",v=>fmt(v))),
       cRow("Programs per discipline", t=>rng(t,"minProg","maxProg",v=>v)),
       cRow("Course Coordinators per discipline", t=>rng(t,"minCC","maxCC",v=>v)),
-      cRow("Credits per discipline", t=>rng(t,"minCr","maxCr",v=>fmt(v))),
       sec("Discipline balance  (largest ÷ smallest - lower = more balanced)"),
       cRow("Course Coordinators", t=>rat(t,"rCc","maxCC")),
       cRow("Programs", t=>rat(t,"rProg","maxProg")),
       cRow("Staff FTE", t=>rat(t,"rFte","maxFte")),
       cRow("Students", t=>rat(t,"rSt","maxSt")),
-      cRow("Credits", t=>rat(t,"rCr","maxCr")),
       cRow("Overall balance score", t=> t.n && t.balance ? fmtRatio(t.balance) : "-"),
       sec("Roles & service cost"),
       cRow("Heads of Discipline", t=>t.n),
